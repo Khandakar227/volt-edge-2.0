@@ -5,6 +5,13 @@
 This plan operationalizes the [SPEC](./SPEC.md). It expands the architecture in
 [AGENTIC_PLAN.md](../AGENTIC_PLAN.md) into concrete modules, contracts, and a build sequence.
 
+> **Phase 0 is complete** ([PHASE0_RESULTS.md](./PHASE0_RESULTS.md)) — the spikes changed several
+> assumptions below. Key deltas baked into this plan: (a) render **backend-built `circuit.json`**
+> via `CircuitJsonPreview` (or standalone/iframe), **not** browser `.tsx` re-compilation — this
+> eliminates the two-compiler drift risk; (b) `tsci export -f gerbers` is the whole fab-zip path;
+> (c) the frontend is **React 19**; (d) the Agent SDK **bundles its own CLI** and has native budget
+> controls; (e) `tsci` requires **bun**.
+
 ## 1. Architecture overview
 
 ```
@@ -30,9 +37,12 @@ This plan operationalizes the [SPEC](./SPEC.md). It expands the architecture in
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Two compilers, one source of truth (`.tsx`):** backend `tsci` compiles for the agent's
-verification loop; browser runframe compiles the same fsMap for display. They **must be
-version-pinned to match** (NFR-1).
+**One compiler, one artifact (revised after Phase 0):** backend `tsci` compiles `.tsx` →
+`circuit.json` for both the agent's verification loop **and** display. The browser renders that
+`circuit.json` via `CircuitJsonPreview` (no in-browser eval), so there is no second compiler to
+drift against. (The `RunFrame(fsMap)` browser-recompile path remains available if live in-browser
+code editing is ever wanted, but is not used in v1.) The backend still pins `tscircuit`/`tsci` and
+the frontend pins the matching runframe viewer set (NFR-1).
 
 ## 2. Repository layout (target)
 
@@ -82,15 +92,24 @@ volt-edge-2.0/
 - **Idle teardown:** background sweeper closes clients idle > `IDLE_TTL`; next access resumes.
 - Per-project `asyncio.Lock` serializes turns (no concurrent turns on one project).
 
-### 3.2 Agent wiring (`agent.py`)
+### 3.2 Agent wiring (`agent.py`) — validated in P0-5
 - Build `ClaudeAgentOptions`:
   - `cwd` = project workspace.
-  - `permission_mode` auto-allows Write/Edit; a `can_use_tool` callback enforces the **Bash
-    allowlist** (`tsci *`, `npm`/`bun`, `git`, `ls`/`cat`/`grep`/`find`) and denies the rest,
-    and confines Write/Edit paths to the workspace.
-  - `setting_sources` includes the mounted `../skill` so the tscircuit skill auto-activates.
-  - `model`: default **Sonnet**; escalate to **Opus** for hard routing/placement turns (config flag).
-  - `resume` = stored `session_id`.
+  - `permission_mode="acceptEdits"` auto-allows Write/Edit; a `can_use_tool` callback enforces the
+    **Bash allowlist** (`tsci *`, `npm`/`bun`, `git`, `ls`/`cat`/`grep`/`find`) and confines
+    Write/Edit paths to the workspace. **⚠ `Bash` must be kept OUT of `allowed_tools`** — listing a
+    tool there pre-approves it and bypasses `can_use_tool` (confirmed in P0-5). Gate Bash only via
+    the callback (or a `PreToolUse` hook).
+  - **Skill mount:** copy `skill/` into `<cwd>/.claude/skills/tscircuit/`, set
+    `setting_sources=["project"]` and `skills=["tscircuit"]`. Confirmed to auto-activate (the agent
+    invoked the `Skill` tool in the P0-5 trace).
+  - `model`: default **Sonnet**; `fallback_model`/config escalation to **Opus** for hard
+    routing/placement turns.
+  - `resume` = stored `session_id` (also `fork_session`, `continue_conversation` available).
+  - **Native guardrails:** set `max_turns` and `max_budget_usd` (and/or `task_budget`) as a first
+    line of defense, backing the custom per-turn caps in §3.4.
+  - The SDK **bundles its own `claude` CLI** — no separate CLI install; override with `cli_path` if
+    a specific Claude Code build is desired. Pass `env={"PATH": ...}` so `tsci`/`bun` are reachable.
 - Feed user input via the streaming input queue; consume SDK messages async and hand each to the
   event mapper.
 
@@ -110,16 +129,21 @@ volt-edge-2.0/
 - Limits are config-driven (`config.py`): `MAX_TURN_SECONDS`, `MAX_TSCI_CALLS`, `MAX_TURN_TOKENS`.
 
 ### 3.5 Workspace service (`workspace.py`)
-- `scaffold(cwd)`: `tsci init -y` (+ pinned `tscircuit` install) in a fresh per-project dir.
+- `scaffold(cwd)`: `tsci init -y` in a fresh per-project dir, then **rewrite `package.json` to pin
+  `tscircuit` to the locked version** (the scaffold writes `"latest"`). Requires `bun` on PATH.
 - `read_fsmap(cwd)`: walk workspace source files (`.tsx`, `package.json`, `tscircuit.config.json`,
-  `parts/*`) into `{ path: contents }` for the browser; exclude `node_modules`/`dist`.
-- `latest_circuit_json(cwd)`: path to `dist/circuit.json` for export.
+  `imports/*`) into `{ path: contents }`; exclude `node_modules`/`dist`.
+- `latest_circuit_json(cwd)`: path is **`dist/<entrypoint>/circuit.json`** (e.g.
+  `dist/index/circuit.json`) — per-entrypoint subdir, confirmed in P0-1.
 
 ### 3.6 Export service (`export.py`)
-- **Source zip:** stream the fsMap + `dist/circuit.json`.
-- **Fab zip:** from `circuit.json` produce Gerbers + BOM + PnP. Path **TBD in Phase 0** — either a
-  confirmed `tsci`/CLI command or programmatic generation (`circuit-json-to-gerber` + BOM/PnP from
-  `circuit.json`). Emit the "manufacturability user-owned" caveat in the response.
+- **Fab zip (confirmed in P0-3):** `tsci export <entry>.circuit.tsx -f gerbers -o <out>.zip`
+  emits one zip containing all Gerber layers, `drill.drl`/`drill_npth.drl`, **`bom.csv`**, and
+  **`pick_and_place.csv`**. The service is a thin wrapper around this command — no programmatic
+  `circuit-json-to-gerber` path needed. Emit the "manufacturability user-owned" caveat in the response.
+- **Source zip:** stream the fsMap + `dist/<entrypoint>/circuit.json`.
+- Other `tsci export -f` formats available if needed: `schematic-svg`, `pcb-svg`, `gltf`/`glb`,
+  `kicad_zip`, `specctra-dsn`, `readable-netlist`, `step`, `assembly-svg`.
 
 ### 3.7 Persistence (`db.py`, `models.py`) — SQLite via SQLModel
 ```
@@ -159,13 +183,17 @@ done            { turn_id }
 ```
 Client → server (POST): `message`, `answer{question_id}`, `interrupt`, `approve`.
 
-## 5. Frontend design
+## 5. Frontend design (React 19 — required by the runframe viewer set, per P0-4)
 - **Layout:** left chat sidekick, right canvas with `Schematic | PCB | 3D` tabs.
 - **Chat stream:** `EventSource` consumer renders `thinking` (collapsible), `assistant_text`,
   `tool_use`/`tool_result` (activity chips), a **Plan card**, a **Question prompt** (options +
   free text), an **Interrupt** button, and `paused`/`error` banners.
-- **Canvas:** `@tscircuit/runframe` mounted with the fetched fsMap; re-renders on `checkpoint`;
-  resolves `@tsci/*` + JLCPCB imports from the tscircuit CDN.
+- **Canvas:** on `checkpoint`, fetch the backend-built `circuit.json` and render it with
+  `CircuitJsonPreview({ circuitJson, availableTabs:["pcb","schematic","cad"] })`. This needs no
+  in-browser eval and no `.tsx` recompilation, so there is no compiler drift. The 3D viewer still
+  pulls model assets from `modelcdn.tscircuit.com` (verified live). **Do not bundle
+  `@tscircuit/runframe/runner` from source** — its undeclared-dependency tail makes that
+  impractical (P0-4); use the `/preview` viewers (or the standalone bundle / hosted iframe).
 - **Export:** buttons for fab zip + source download, with the manufacturability caveat.
 
 ## 6. Agent turn lifecycle (driven by the tscircuit skill)
@@ -184,22 +212,24 @@ Client → server (POST): `message`, `answer{question_id}`, `interrupt`, `approv
 
 ## 7. Risks & mitigations
 
-| # | Risk | Mitigation | Phase |
+| # | Risk | Status after Phase 0 | Phase |
 |---|------|-----------|-------|
-| 1 | Headless fab-zip path unproven | Spike CLI vs programmatic `circuit.json`→Gerber/BOM/PnP | 0 |
-| 2 | Two-compiler drift | Pin identical tscircuit versions across `tsci` + runframe; assert at startup | 0 |
-| 3 | `tsci import` interactivity | Confirm non-interactive import by exact LCSC part#; scripted fallback | 0 |
-| 4 | Long-lived subprocess growth | Idle teardown + resume; per-project client lifecycle | 3 |
-| 5 | Datasheet hallucination | Keep hand-model tier last-resort, verification-gated (skill) | 2 |
-| 6 | CDN dependency | Document; offline would need bundling (out of v1 scope) | — |
-| 7 | Local-auth cost | Hard per-turn caps + soft budget | 2 |
-| 8 | Manufacturability caveat | Surface clearly at export in UI | 3 |
+| 1 | Headless fab-zip path unproven | ✅ **Closed** — `tsci export -f gerbers` emits Gerbers+BOM+PnP zip | 0 |
+| 2 | Two-compiler drift | ✅ **Eliminated** — render backend-built `circuit.json`; no browser recompile | 0 |
+| 3 | `tsci import` interactivity | ✅ **Closed** — `tsci import <part> --jlcpcb` is non-interactive | 0 |
+| 4 | Long-lived subprocess growth | Open — idle teardown + resume; per-project client lifecycle | 3 |
+| 5 | Datasheet hallucination | Open — keep hand-model tier last-resort, verification-gated (skill) | 2 |
+| 6 | CDN dependency | Open (accepted) — registry/model CDNs verified live; offline out of v1 scope | — |
+| 7 | Local-auth cost | Open — native `max_budget_usd`/`max_turns` + hard caps + soft budget (~$0.18/simple turn baseline) | 2 |
+| 8 | Manufacturability caveat | Open — surface clearly at export in UI | 3 |
+| 9 | **runframe undeclared deps / React 19** (new) | Mitigated — use `/preview` viewers or standalone/iframe; pin React 19 + viewer set | 0/1 |
 
 ## 8. Build phases
 
-- **Phase 0 — Spikes (de-risk first):** confirm non-interactive `tsci import` by LCSC part#;
-  confirm a headless fab-zip path; confirm runframe fsMap render + CDN import resolution;
-  pin matching tscircuit versions across backend and browser.
+- **Phase 0 — Spikes (de-risk first): ✅ COMPLETE** ([PHASE0_RESULTS.md](./PHASE0_RESULTS.md)) —
+  non-interactive import, headless fab-zip, render engine + integration path, and a real Agent SDK
+  turn all confirmed. Only residual: a live browser pixel-render (manual, folded into P1-14) and
+  final version pinning before integration.
 - **Phase 1 — Vertical slice:** create project → single prompt → agent builds a minimal board →
   SSE thinking stream → `checkpoint` → browser renders schematic. Local, one project.
 - **Phase 2 — Full loop:** plan card, hard-block questions, interrupt, tiered sourcing, all three

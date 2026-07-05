@@ -154,9 +154,14 @@ local-auth cost · manufacturability caveat.
 
 ## 10. Open questions
 
-- **OQ-1** Headless fab-zip: confirmed CLI path, or programmatic generation from `circuit.json`? (Phase 0)
-- **OQ-2** Non-interactive `tsci import` by exact LCSC part# — confirmed, or scripted fallback? (Phase 0)
+- ~~**OQ-1** Headless fab-zip~~ — ✅ **Resolved (P0-3):** `tsci export -f gerbers -o out.zip` emits
+  Gerbers + `bom.csv` + `pick_and_place.csv`. No programmatic fallback needed.
+- ~~**OQ-2** Non-interactive `tsci import`~~ — ✅ **Resolved (P0-2):** `tsci import <part> --jlcpcb`
+  is non-interactive.
 - **OQ-3** Model policy: default Sonnet, escalate to Opus for hard routing/placement — config-tunable?
-- **OQ-4** Idle-session timeout value and teardown/resume semantics.
+  (Deferred to Phase 2; SDK supports `model`/`fallback_model`.)
+- **OQ-4** Idle-session timeout value and teardown/resume semantics. (Deferred to Phase 3.)
+
+> Phase 0 outcomes are recorded in [PHASE0_RESULTS.md](./PHASE0_RESULTS.md).
 </content>
 </invoke>

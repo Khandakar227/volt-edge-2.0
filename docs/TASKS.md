@@ -11,28 +11,28 @@
 
 ---
 
-## Phase 0 — Spikes (de-risk before building) 🔴 blocking
+## Phase 0 — Spikes (de-risk before building) ✅ COMPLETE
 
-- [ ] **P0-1 — Pin & verify tscircuit version parity.** *(NFR-1, Risk 2)*
-  Install `tscircuit` globally at a pinned version; record it. Confirm `@tscircuit/runframe`
-  resolves the *same* compiler version. **DoD:** a documented pinned version used by both
-  backend `tsci` and frontend runframe; a startup assertion plan.
-- [ ] **P0-2 — Non-interactive `tsci import` by exact LCSC part#.** *(FR-11, Risk 3)*
-  Verify `tsci import "C14877"` (or equivalent) imports without the interactive picker in a
-  scripted context. **DoD:** a reproducible command (or documented scripted fallback) that
-  imports a known part headlessly.
-- [ ] **P0-3 — Headless fabrication-zip path.** *(FR-17, Risk 1)*
-  Determine how to produce Gerbers/BOM/PnP from `circuit.json` without the interactive export UI
-  (confirmed CLI command **or** programmatic `circuit-json-to-gerber` + BOM/PnP). **DoD:** a
-  script that turns a built `circuit.json` into a valid fab zip.
-- [ ] **P0-4 — Runframe in-browser render spike.** *(FR-15, Risk 6)*
-  Stand up a minimal Vite page that mounts `@tscircuit/runframe` with a hand-written fsMap and
-  renders schematic + PCB, resolving `@tsci/*`/JLCPCB imports from the CDN. **DoD:** a fixture
-  fsMap renders all three views in the browser.
-- [ ] **P0-5 — Claude Agent SDK smoke.** *(FR-5)*
-  Minimal Python script: construct a streaming `ClaudeSDKClient` with `cwd` + mounted skill,
-  send one message, print the message stream. **DoD:** a turn completes and the tscircuit skill
-  activates against a scaffolded workspace.
+> Full write-up: [PHASE0_RESULTS.md](./PHASE0_RESULTS.md). All five passed; Phase 1 unblocked.
+
+- [x] **P0-1 — Pin & verify tscircuit version parity.** *(NFR-1, Risk 2)*
+  ✅ `tsci` 0.0.2001 installs; **requires `bun`**. `tsci build` → `dist/<entry>/circuit.json`.
+  Scaffold pins `tscircuit: latest` → workspace service must rewrite to the locked version.
+- [x] **P0-2 — Non-interactive `tsci import` by exact LCSC part#.** *(FR-11, Risk 3)*
+  ✅ `tsci import C14877 --jlcpcb < /dev/null` imports headlessly → `imports/<PART>.tsx`
+  with `supplierPartNumbers`, footprint, pinLabels. Risk 3 closed.
+- [x] **P0-3 — Headless fabrication-zip path.** *(FR-17, Risk 1)*
+  ✅ `tsci export <file> -f gerbers -o out.zip` yields Gerbers + drill + **bom.csv** +
+  **pick_and_place.csv** in one zip. No programmatic fallback needed. Risk 1 closed.
+- [x] **P0-4 — Runframe render spike.** *(FR-15, Risk 6)*
+  ✅ Engine proven (schematic/pcb/gltf all export). Source-bundling runframe is impractical
+  (undeclared deps; **needs React 19**) → use standalone bundle / hosted iframe / `CircuitJsonPreview`
+  on backend-built circuit.json. CDNs live. Risk 2 eliminated by rendering circuit.json.
+  ↳ residual: live pixel render is a manual Phase 1 dev-server check (P1-14).
+- [x] **P0-5 — Claude Agent SDK smoke.** *(FR-5)*
+  ✅ Real turn: skill activated, agent wrote `.tsx`, ran `tsci build`, produced circuit.json;
+  stream maps to the SSE taxonomy; ~$0.18/turn. SDK **bundles its own CLI**; native
+  `max_turns`/`max_budget_usd`/`task_budget`. ⚠ `allowed_tools` bypasses `can_use_tool` (see P2-4).
 
 ---
 
@@ -67,6 +67,8 @@
 - [ ] **P2-2 — Question flow.** Emit `question`; block turn until `POST /message` answer. *(FR-8)*
 - [ ] **P2-3 — Interrupt.** `POST /projects/{id}/interrupt` → `client.interrupt()`. *(FR-9)*
 - [ ] **P2-4 — Bash allowlist (`can_use_tool`).** Enforce allowlist; confine Write/Edit to workspace. *(FR-22)*
+  ⚠ Per P0-5: keep `Bash` **out of** `allowed_tools` (listing it pre-approves and bypasses the
+  callback); gate Bash in `can_use_tool` or a `PreToolUse` hook. Verify the callback fires.
 - [ ] **P2-5 — Tiered sourcing wiring.** Ensure registry → JLCPCB exact part# → hand-model path works end-to-end (uses P0-2). *(FR-11)*
 - [ ] **P2-6 — `build_status` events.** Surface `tsci check` phases + violations. *(FR-12)*
 - [ ] **P2-7 — Guardrails.** Per-turn caps (wall-clock, `tsci` calls, tokens) → `paused`. *(FR-20, FR-21)*
