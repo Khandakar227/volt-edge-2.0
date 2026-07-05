@@ -36,27 +36,32 @@
 
 ---
 
-## Phase 1 — Vertical slice (create → prompt → render)
+## Phase 1 — Vertical slice (create → prompt → render) ✅ COMPLETE (2026-07-06)
 
 ### Backend
-- [ ] **P1-1 — Project scaffold.** Repo layout per PLAN §2; `pyproject.toml`; FastAPI app boots. *(setup)*
-- [ ] **P1-2 — SQLite + models.** `projects/sessions/messages/checkpoints` via SQLModel. *(FR-4)*
-- [ ] **P1-3 — Workspace service.** `scaffold()` (`tsci init -y` + pinned install), `read_fsmap()`. *(FR-1, FR-3)*
-- [ ] **P1-4 — `POST /projects` + `GET /projects`.** Create/list; scaffold on create. *(FR-1, FR-2)*
-- [ ] **P1-5 — `GET /projects/{id}/fsmap`.** Serve source fsMap for the renderer. *(FR-3)*
-- [ ] **P1-6 — Session Manager (single active).** One streaming `ClaudeSDKClient` per project. *(FR-5, decision 7)*
-- [ ] **P1-7 — Agent wiring.** `ClaudeAgentOptions`: cwd, skill in `setting_sources`, default Sonnet. *(FR-10)*
-- [ ] **P1-8 — Event mapper + SSE relay.** SDK stream → `thinking`/`assistant_text`/`tool_use`/`tool_result`/`checkpoint`/`done`. *(FR-6)*
-- [ ] **P1-9 — `POST /projects/{id}/message` + `GET /events`.** Drive a turn; stream events. *(FR-5, FR-6)*
-- [ ] **P1-10 — Checkpoint on build success.** Detect a clean `tsci build`; emit `checkpoint`; persist metadata. *(FR-13)*
+- [x] **P1-1 — Project scaffold.** Repo layout per PLAN §2; `pyproject.toml`; FastAPI app boots. *(setup)*
+- [x] **P1-2 — SQLite + models.** `projects/sessions/messages/checkpoints` via SQLModel. *(FR-4)*
+- [x] **P1-3 — Workspace service.** `scaffold()` (`tsci init -y` + pinned install), `read_fsmap()`. *(FR-1, FR-3)*
+- [x] **P1-4 — `POST /projects` + `GET /projects`.** Create/list; scaffold on create. *(FR-1, FR-2)*
+- [x] **P1-5 — `GET /projects/{id}/fsmap`.** Serve source fsMap for the renderer. *(FR-3)*
+- [x] **P1-6 — Session Manager (single active).** One streaming `ClaudeSDKClient` per project. *(FR-5, decision 7)*
+- [x] **P1-7 — Agent wiring.** `ClaudeAgentOptions`: cwd, skill in `setting_sources`, default Sonnet. *(FR-10)*
+- [x] **P1-8 — Event mapper + SSE relay.** SDK stream → `thinking`/`assistant_text`/`tool_use`/`tool_result`/`checkpoint`/`done`. *(FR-6)*
+- [x] **P1-9 — `POST /projects/{id}/message` + `GET /events`.** Drive a turn; stream events. *(FR-5, FR-6)*
+- [x] **P1-10 — Checkpoint on build success.** Detect a clean `tsci build`; emit `checkpoint`; persist metadata. *(FR-13)*
 
 ### Frontend
-- [ ] **P1-11 — Vite app + layout.** Chat left, canvas right. *(setup)*
-- [ ] **P1-12 — API + EventSource client.** POST message; consume SSE. *(FR-6)*
-- [ ] **P1-13 — Chat stream (minimal).** Render `thinking` (collapsible), `assistant_text`, tool chips. *(FR-6)*
-- [ ] **P1-14 — Runframe canvas.** Mount fsMap; re-fetch + re-render on `checkpoint`; Schematic tab. *(FR-15, FR-16)*
+- [x] **P1-11 — Vite app + layout.** Chat left, canvas right. *(setup)*
+- [x] **P1-12 — API + EventSource client.** POST message; consume SSE. *(FR-6)*
+- [x] **P1-13 — Chat stream (minimal).** Render `thinking` (collapsible), `assistant_text`, tool chips. *(FR-6)*
+- [x] **P1-14 — Runframe canvas.** Mount fsMap; re-fetch + re-render on `checkpoint`; Schematic tab. *(FR-15, FR-16)*
 
-**Phase 1 exit:** SPEC §8 criteria 1–2 pass locally for one project.
+**Phase 1 exit:** SPEC §8 criteria 1–2 pass locally for one project. ✅ Verified 2026-07-06:
+create → real agent turn → SSE (`thinking/assistant_text/tool_use/tool_result/checkpoint/done`) →
+`circuit.json` served → second iteration turn after backend restart also passed (~$0.10–0.19/turn).
+Bonus items landed early: interrupt endpoint (P2-3) and the Bash `can_use_tool` allowlist verified
+live (P2-4 concern resolved — Bash kept out of `allowed_tools`, callback fires and gates).
+Residual: visual check of `CircuitJsonPreview` in a real browser (open http://localhost:5173).
 
 ---
 
@@ -106,7 +111,7 @@
 - [ ] **X-2 — Toolchain smoke CI.** Scaffold → minimal `.tsx` → `tsci build` → `circuit.json`.
 - [ ] **X-3 — Integration test.** Stubbed `ClaudeSDKClient` → assert SSE sequence.
 - [ ] **X-4 — Dev ergonomics.** `docker-compose` (node/bun + backend + frontend); README run steps.
-- [ ] **X-5 — `.gitignore`.** `workspaces/`, `data/`, `node_modules/`, `dist/`, `.venv/`.
+- [x] **X-5 — `.gitignore`.** `workspaces/`, `data/`, `node_modules/`, `dist/`, `.venv/`.
 
 ## Suggested milestone ordering
 `P0-* → P1-* → P2-* → P3-*`, with `X-*` folded in continuously. Phase 0 is strictly blocking:
