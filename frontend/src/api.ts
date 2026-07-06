@@ -65,11 +65,18 @@ export const api = {
   ): Promise<{ role: string; content: string; ts: string }[]> =>
     fetch(`/api/projects/${projectId}/messages`).then(jsonOrThrow),
 
-  putManualEdits: (projectId: string, manualEdits: unknown): Promise<{ ok: boolean }> =>
-    fetch(`/api/projects/${projectId}/manual-edits`, {
+  /** A drag finished: rewrite the component's placement props in the source.
+   * Returns the updated index.circuit.tsx so the fsMap can be patched in place. */
+  setPlacement: (
+    projectId: string,
+    placement: { name: string } & Partial<
+      Record<"pcbX" | "pcbY" | "schX" | "schY", number>
+    >,
+  ): Promise<{ ok: boolean; source: string }> =>
+    fetch(`/api/projects/${projectId}/placement`, {
       method: "PUT",
       headers: JSON_HEADERS,
-      body: JSON.stringify(manualEdits),
+      body: JSON.stringify(placement),
     }).then(jsonOrThrow),
 
   getFsMap: async (projectId: string): Promise<Record<string, string>> => {

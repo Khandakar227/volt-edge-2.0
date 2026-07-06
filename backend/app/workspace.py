@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -26,10 +27,8 @@ _TEMPLATE_BASE_FILES = (
 # the agent overwrites it on the first prompt.
 _DEFAULT_ENTRY = "export default () => <board width=\"30mm\" height=\"30mm\" />\n"
 
-# RunFrame reads manual PCB/schematic placements from manual-edits.json at eval
-# time; the frontend writes drag/rotate edits here (PUT /manual-edits). Seed an
-# empty one so the file always exists and shows up in the fsMap from the start.
-_DEFAULT_MANUAL_EDITS = "{}\n"
+# Placement props a drag in the editor is allowed to rewrite (PUT /placement).
+_PLACEMENT_PROPS = ("pcbX", "pcbY", "schX", "schY")
 
 # Source files exposed to the browser (fsMap). node_modules/dist/dotdirs excluded.
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
@@ -116,7 +115,6 @@ async def scaffold(cwd: Path) -> None:
     else:
         await _tsci_init(cwd)
         (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)  # replace tsci's R+C starter
-        (cwd / "manual-edits.json").write_text(_DEFAULT_MANUAL_EDITS)
     _mount_skills(cwd)
     _install_parts_library(cwd)
 
@@ -166,7 +164,6 @@ def _fast_scaffold(cwd: Path, template: Path) -> None:
         pkg["name"] = cwd.name
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
     (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
-    (cwd / "manual-edits.json").write_text(_DEFAULT_MANUAL_EDITS)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
@@ -207,6 +204,49 @@ def _mount_skills(cwd: Path) -> None:
         if target.exists():
             shutil.rmtree(target)
         shutil.copytree(src, target)
+
+
+def set_placement(cwd: Path, name: str, coords: dict[str, float]) -> str:
+    """Rewrite a component's placement props in index.circuit.tsx.
+
+    Dragging a component in the editor calls this with the drop position; the
+    next Run re-evaluates the source and the autorouter re-traces from the new
+    pin locations. `coords` maps prop -> value for props in _PLACEMENT_PROPS
+    (pcbX/pcbY for PCB drags, schX/schY for schematic drags): existing props are
+    replaced in place, missing ones are inserted right after name="...". Returns
+    the updated source. Raises KeyError if no component tag has that name.
+    """
+    path = cwd / "index.circuit.tsx"
+    src = path.read_text()
+
+    # The JSX opening tag containing name="<name>". [^<>] keeps us inside one
+    # tag (simple props like pcbX={-10} or pinLabels={{...}} contain no <>).
+    tag_re = re.compile(
+        rf'<[A-Za-z][\w.]*(?:[^<>]*?)name="{re.escape(name)}"[^<>]*?>', re.S
+    )
+    match = tag_re.search(src)
+    if match is None:
+        raise KeyError(name)
+
+    tag = match.group(0)
+    inserts: list[str] = []
+    for prop, value in coords.items():
+        if prop not in _PLACEMENT_PROPS:
+            raise ValueError(f"unsupported placement prop: {prop}")
+        formatted = f"{prop}={{{format(round(value, 2), 'g')}}}"  # 12.0 -> 12
+        prop_re = re.compile(rf"{prop}=(?:\{{[^{{}}]*\}}|\"[^\"]*\")")
+        if prop_re.search(tag):
+            tag = prop_re.sub(formatted, tag)
+        else:
+            inserts.append(formatted)
+    if inserts:
+        tag = tag.replace(
+            f'name="{name}"', f'name="{name}" {" ".join(inserts)}', 1
+        )
+
+    src = src[: match.start()] + tag + src[match.end() :]
+    path.write_text(src)
+    return src
 
 
 def remove(cwd: Path) -> None:

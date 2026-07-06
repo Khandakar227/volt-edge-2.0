@@ -20,6 +20,7 @@ from .schemas import (
     FsMapOut,
     MessageOut,
     MessageRequest,
+    PlacementRequest,
     ProjectOut,
     RenameProjectRequest,
 )
@@ -142,14 +143,26 @@ async def post_message(
     return {"status": "accepted"}
 
 
-@router.put("/projects/{project_id}/manual-edits")
-async def put_manual_edits(project_id: str, body: dict):
-    """Persist the RunFrame manual-edits file so drag/rotate edits survive reloads
-    (RunFrame reads manual-edits.json from the workspace fsMap on load)."""
+@router.put("/projects/{project_id}/placement")
+async def put_placement(project_id: str, body: PlacementRequest):
+    """A drag finished in the editor: rewrite the component's pcbX/pcbY (or
+    schX/schY) in index.circuit.tsx so the next Run re-evaluates + re-autoroutes
+    at the drop position. Returns the updated source for the frontend's fsMap."""
     project = _get_project(project_id)
-    path = Path(project.cwd) / "manual-edits.json"
-    path.write_text(json.dumps(body, indent=2))
-    return {"ok": True}
+    coords = {
+        k: v for k, v in body.model_dump().items() if k != "name" and v is not None
+    }
+    if not coords:
+        raise HTTPException(422, "no placement props given")
+    try:
+        source = workspace.set_placement(Path(project.cwd), body.name, coords)
+    except KeyError:
+        raise HTTPException(
+            404, f'component named "{body.name}" not found in index.circuit.tsx'
+        )
+    except FileNotFoundError:
+        raise HTTPException(404, "index.circuit.tsx not found")
+    return {"ok": True, "source": source}
 
 
 @router.post("/projects/{project_id}/interrupt")

@@ -21,7 +21,11 @@ export const Mpu6050Gy521 = (props: { name: string;[key: string]: any }) => {
     pin: i + 1,
     label,
     x: (i - (n - 1) / 2) * PITCH,
-    y: 6, // single row along the top edge
+    // Row centered on the origin: the part's origin must equal its pad centroid,
+    // because drags and pcbX/pcbY placement both anchor there — an offset row
+    // makes every drag land offset by that amount (physically the row sits along
+    // the module's top edge, but nothing else in the footprint references that).
+    y: 0,
   }))
   return (
     <chip

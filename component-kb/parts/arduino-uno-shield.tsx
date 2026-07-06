@@ -1,9 +1,12 @@
 const PITCH = 2.54
+// cx values shifted +2.77 from the physical Uno datum so the footprint's bounds
+// are centered on the origin — the origin is the drag/pcbX placement anchor, so
+// an off-center footprint makes every drag land offset by that amount.
 const HEADERS = [
-  { labels: ["SCL", "SDA", "AREF", "GND", "D13", "D12", "D11", "D10", "D9", "D8"], cx: -10.92, y: 24 },
-  { labels: ["D7", "D6", "D5", "D4", "D3", "D2", "D1", "D0"], cx: 13.46, y: 24 },
-  { labels: ["NC", "IOREF", "RESET", "3V3", "5V", "GND", "GND", "VIN"], cx: -19, y: -24 },
-  { labels: ["A0", "A1", "A2", "A3", "A4", "A5"], cx: 16, y: -24 },
+  { labels: ["SCL", "SDA", "AREF", "GND", "D13", "D12", "D11", "D10", "D9", "D8"], cx: -8.15, y: 24 },
+  { labels: ["D7", "D6", "D5", "D4", "D3", "D2", "D1", "D0"], cx: 16.23, y: 24 },
+  { labels: ["NC", "IOREF", "RESET", "3V3", "5V", "GND", "GND", "VIN"], cx: -16.23, y: -24 },
+  { labels: ["A0", "A1", "A2", "A3", "A4", "A5"], cx: 18.77, y: -24 },
 ]
 
 export const ArduinoUnoShield = (props) => {

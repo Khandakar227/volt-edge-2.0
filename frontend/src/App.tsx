@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { applyEditEventsToManualEditsFile } from "@tscircuit/core"
 import { api, subscribeEvents, type ChatEvent, type Project } from "./api"
 import { SessionSidebar } from "./components/SessionSidebar"
 import { ChatPanel } from "./components/ChatPanel"
@@ -27,30 +26,6 @@ const AVAILABLE_TABS = WEBGL_AVAILABLE
 
 const LEFT_WIDTH_KEY = "voltedge.leftWidth"
 
-// The eval worker never reads manual-edits.json on its own — it applies manual
-// PCB/schematic placements ONLY through the board's `manualEdits` prop
-// (RootCircuit.getManualPlacementForComponent). Agent-authored boards aren't
-// wired for it, so drags would never persist through a Run. Wire the copy of
-// index.circuit.tsx that RunFrame evaluates (the on-disk file stays untouched):
-// import manual-edits.json and pass it to the first <board>. Verified in-browser
-// against the real eval engine — without this the component stays at (0,0); with
-// it, it moves to the manual placement.
-function wireManualEdits(
-  files: Record<string, string>,
-): Record<string, string> {
-  const src = files["index.circuit.tsx"]
-  // Skip if there's no entry, no board, or it's already wired (agent or us).
-  if (!src || /manualEdits/.test(src) || !/<board/.test(src)) return files
-  let wired = src
-  if (!/from\s+["']\.\/manual-edits\.json["']/.test(wired)) {
-    wired = `import __manualEdits from "./manual-edits.json"\n` + wired
-  }
-  // Inject the prop on the first <board> (handles `<board ...>`, `<board>`,
-  // `<board/>`). Non-global: only the root board.
-  wired = wired.replace(/<board(\s|>|\/)/, `<board manualEdits={__manualEdits}$1`)
-  return { ...files, "index.circuit.tsx": wired }
-}
-
 /** Session title derived from the first prompt (trimmed to a readable length). */
 function deriveTitle(text: string): string {
   const t = text.trim().replace(/\s+/g, " ")
@@ -67,16 +42,9 @@ export default function App() {
   // bump evalVersion to force a re-eval after the agent changes files.
   const [fsMap, setFsMap] = useState<Record<string, string> | null>(null)
   const [evalVersion, setEvalVersion] = useState(0)
-  // Manual PCB/schematic edits (drag/rotate). RunFrame's viewers render purely
-  // from the evaluated circuitJson — the `editEvents` prop reaches neither the
-  // PCB nor the schematic viewer — so the ONLY way a drag survives a Run is to
-  // fold it into manual-edits.json inside the fsMap the eval reads. We keep a
-  // running manual-edits object, write it back into fsMap on every edit (Run
-  // then re-evaluates + re-autoroutes at the new position), and debounce-persist
-  // it to the workspace so edits also survive a reload.
+  // Latest evaluated circuit JSON — used to resolve a dragged element's id back
+  // to its component name so the drag can be written into the source.
   const circuitJsonRef = useRef<any>([])
-  const manualEditsRef = useRef<any>({})
-  const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeIdRef = useRef<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
@@ -88,19 +56,8 @@ export default function App() {
   const loadFsMap = useCallback(async (id: string) => {
     try {
       const files = await api.getFsMap(id)
-      // Always keep manual-edits.json present as a key so later content updates
-      // don't change PreviewPane's remount key (activeKey is keyed on filenames).
-      if (files["manual-edits.json"] == null) files["manual-edits.json"] = "{}"
-      // Wire the board to consume manual-edits.json so drags persist through Run.
-      setFsMap(wireManualEdits(files))
+      setFsMap(files)
       setEvalVersion((v) => v + 1)
-      // The eval reads manual-edits.json from the fsMap; seed our running merge
-      // base from that file so subsequent drags accumulate onto it.
-      try {
-        manualEditsRef.current = JSON.parse(files["manual-edits.json"])
-      } catch {
-        manualEditsRef.current = {}
-      }
     } catch {
       /* no build yet — leave as-is */
     }
@@ -110,32 +67,52 @@ export default function App() {
     circuitJsonRef.current = cj
   }, [])
 
-  // A drag/rotate finished: fold it into manual-edits.json and write that back
-  // into fsMap so the next Run re-evaluates + re-autoroutes at the new position.
-  // showRunButton gates auto-eval, so this does NOT trigger an immediate re-run.
+  // A drag finished: write the drop position into the component's pcbX/pcbY
+  // (or schX/schY) in index.circuit.tsx via the backend, then patch the local
+  // fsMap with the updated source. The next Run re-evaluates from that source,
+  // so the component stays put and the autorouter re-traces from its new pins.
+  // (showRunButton gates auto-eval — patching fsMap does NOT trigger a re-run.)
   const onEditEvent = useCallback((ev: any) => {
-    let updated: any
-    try {
-      updated = applyEditEventsToManualEditsFile({
-        circuitJson: circuitJsonRef.current ?? [],
-        editEvents: [ev],
-        manualEditsFile: manualEditsRef.current ?? {},
-      })
-    } catch {
-      return // malformed edit — nothing safe to persist
-    }
-    manualEditsRef.current = updated
-    const content = JSON.stringify(updated, null, 2)
-    setFsMap((prev) =>
-      prev ? { ...prev, "manual-edits.json": content } : prev,
-    )
-    // Debounced persist to the workspace so edits also survive a reload.
     const id = activeIdRef.current
-    if (!id) return
-    if (persistTimer.current) clearTimeout(persistTimer.current)
-    persistTimer.current = setTimeout(() => {
-      void api.putManualEdits(id, updated)
-    }, 600)
+    if (!id || !ev?.new_center) return
+    const cj: any[] = Array.isArray(circuitJsonRef.current)
+      ? circuitJsonRef.current
+      : []
+    const bySource = (sourceId: string | undefined) =>
+      cj.find(
+        (e) => e.type === "source_component" && e.source_component_id === sourceId,
+      )?.name as string | undefined
+
+    let name: string | undefined
+    let coords: Partial<Record<"pcbX" | "pcbY" | "schX" | "schY", number>> = {}
+    if (ev.edit_event_type === "edit_pcb_component_location") {
+      const pcb = cj.find(
+        (e) =>
+          e.type === "pcb_component" &&
+          e.pcb_component_id === ev.pcb_component_id,
+      )
+      name = bySource(pcb?.source_component_id)
+      coords = { pcbX: ev.new_center.x, pcbY: ev.new_center.y }
+    } else if (ev.edit_event_type === "edit_schematic_component_location") {
+      const sch = cj.find(
+        (e) =>
+          e.type === "schematic_component" &&
+          e.schematic_component_id === ev.schematic_component_id,
+      )
+      name = bySource(sch?.source_component_id)
+      coords = { schX: ev.new_center.x, schY: ev.new_center.y }
+    }
+    if (!name) return
+    void api
+      .setPlacement(id, { name, ...coords })
+      .then(({ source }) => {
+        setFsMap((prev) =>
+          prev ? { ...prev, "index.circuit.tsx": source } : prev,
+        )
+      })
+      .catch(() => {
+        /* keep the in-viewer position; the next fsMap load resyncs */
+      })
   }, [])
 
   // Keep a ref of the active id so the RunFrame edit callback (captured once by
@@ -223,7 +200,6 @@ export default function App() {
     setActiveId(null)
     setEvents([])
     setFsMap(null)
-    manualEditsRef.current = {}
     setBusy(false)
   }
 

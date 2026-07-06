@@ -29,6 +29,17 @@ class MessageOut(BaseModel):
     ts: datetime
 
 
+class PlacementRequest(BaseModel):
+    """A drag in the editor: rewrite the named component's placement props in
+    index.circuit.tsx (pcbX/pcbY for PCB drags, schX/schY for schematic)."""
+
+    name: str = Field(min_length=1, max_length=100)
+    pcbX: float | None = None
+    pcbY: float | None = None
+    schX: float | None = None
+    schY: float | None = None
+
+
 class EventOut(BaseModel):
     type: str
     data: dict
