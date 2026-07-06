@@ -12,8 +12,17 @@ import {
 import type { Project } from "../api"
 import { cn } from "../lib/utils"
 
+function parseUtc(iso: string): Date {
+  // Trim microseconds to milliseconds and append Z if missing
+  const normalized = iso
+    .replace(/\.(\d{3})\d+/, ".$1")
+    .replace(/(?<!Z)$/, "Z");
+
+  return new Date(normalized);
+}
+
 function relativeTime(iso: string): string {
-  const then = Date.parse(iso)
+  const then = parseUtc(iso).getTime(); // Date.parse(iso)
   if (Number.isNaN(then)) return ""
   const secs = Math.max(0, (Date.now() - then) / 1000)
   if (secs < 60) return "just now"
