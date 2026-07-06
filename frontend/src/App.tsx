@@ -122,11 +122,13 @@ export default function App() {
 
   const interrupt = () => activeId && api.interrupt(activeId)
 
-  const newChat = async () => {
-    const n = projects.length + 1
-    const created = await api.createProject(`Board ${n}`)
-    setProjects((prev) => [created, ...prev])
-    await loadSession(created.id)
+  // New chat is a blank slate — no backend project (and no scaffold) is created
+  // until the first prompt lazily creates it in `send`.
+  const newChat = () => {
+    setActiveId(null)
+    setEvents([])
+    setCircuitJson(null)
+    setBusy(false)
   }
 
   const setWidth = (w: number) => {

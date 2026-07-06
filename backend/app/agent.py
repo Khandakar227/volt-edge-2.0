@@ -26,6 +26,25 @@ from claude_agent_sdk import (
 
 from .config import settings
 
+# Steering appended to the default Claude Code system prompt. Addresses observed
+# over-engineering: adding unrequested passives, splitting schematics into
+# sections, sparse layouts, and wasted tool calls.
+VOLTEDGE_SYSTEM_APPEND = """\
+You are VoltEdge's circuit-design agent. Design rules for every request:
+
+- Build exactly what the user asks for and nothing more. Do NOT add extra parts unless the user asks for them or the circuit cannot function without them — and if one is strictly required, add it and state why in one line.
+- "breakout board" / "module" means use the ready-made breakout component with its header pins and wire the modules directly together. Do not expand a module into discrete parts.
+- Wire pins directly net-to-net and keep the schematic compact. Prefer direct
+  connections over splitting the schematic into separate sections/groups.
+- Keep the layout condensed: place components close together and size the board
+  to fit the parts snugly rather than spreading them out.
+- Be efficient with tools. You already run inside the project working directory —
+  never use `cd`. Do not run `tsci build --pcb-png` (unsupported here). Do not
+  create README/summary/doc files unless explicitly asked. Run only the checks
+  you need, then `tsci build`.
+- Finish with a 1-3 sentence summary, not a long report.
+"""
+
 BASH_ALLOWED_PREFIXES = (
     "tsci",
     "npm",
@@ -70,6 +89,11 @@ def build_options(cwd: Path) -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         cwd=str(cwd),
         permission_mode="acceptEdits",
+        system_prompt={
+            "type": "preset",
+            "preset": "claude_code",
+            "append": VOLTEDGE_SYSTEM_APPEND,
+        },
         setting_sources=["project"],
         skills=["tscircuit"],
         allowed_tools=["Read", "Write", "Edit", "Glob", "Grep"],  # Bash gated via callback
