@@ -12,10 +12,16 @@ export function PreviewPane({
   fsMap,
   evalVersion,
   availableTabs,
+  editEvents,
+  onEditEvent,
+  onCircuitJsonChange,
 }: {
   fsMap: Record<string, string> | null
   evalVersion: number
   availableTabs: readonly string[]
+  editEvents: any[]
+  onEditEvent: (ev: any) => void
+  onCircuitJsonChange: (cj: any) => void
 }) {
   const hasCircuit = !!fsMap && !!fsMap["index.circuit.tsx"]
 
@@ -38,6 +44,9 @@ export function PreviewPane({
         showRunButton
         evalVersion={String(evalVersion)}
         evalWebWorkerBlobUrl={evalWebWorkerBlobUrl}
+        editEvents={editEvents}
+        onEditEvent={onEditEvent}
+        onCircuitJsonChange={onCircuitJsonChange}
       />
     </div>
   )

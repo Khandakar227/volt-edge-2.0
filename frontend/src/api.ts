@@ -81,6 +81,13 @@ export const api = {
   ): Promise<{ role: string; content: string; ts: string }[]> =>
     fetch(`/api/projects/${projectId}/messages`).then(jsonOrThrow),
 
+  putManualEdits: (projectId: string, manualEdits: unknown): Promise<{ ok: boolean }> =>
+    fetch(`/api/projects/${projectId}/manual-edits`, {
+      method: "PUT",
+      headers: JSON_HEADERS,
+      body: JSON.stringify(manualEdits),
+    }).then(jsonOrThrow),
+
   getFsMap: async (projectId: string): Promise<Record<string, string>> => {
     const res: { files: Record<string, string> } = await fetch(
       `/api/projects/${projectId}/fsmap`,

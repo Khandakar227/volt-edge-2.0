@@ -153,6 +153,16 @@ async def post_message(
     return {"status": "accepted"}
 
 
+@router.put("/projects/{project_id}/manual-edits")
+async def put_manual_edits(project_id: str, body: dict):
+    """Persist the RunFrame manual-edits file so drag/rotate edits survive reloads
+    (RunFrame reads manual-edits.json from the workspace fsMap on load)."""
+    project = _get_project(project_id)
+    path = Path(project.cwd) / "manual-edits.json"
+    path.write_text(json.dumps(body, indent=2))
+    return {"ok": True}
+
+
 @router.post("/projects/{project_id}/layout")
 async def apply_layout(project_id: str, body: LayoutRequest):
     """Apply UI move/rotate edits to the circuit source and rebuild (re-route)."""
