@@ -28,12 +28,15 @@ def _make_project(db_mod, models_mod, pid="p1", source=BOARD):
 def test_placement_replaces_existing_coords(client):
     tc, db_mod, models_mod = client
     cwd = _make_project(db_mod, models_mod)
+    # Exact precision matters: the viewer only treats a stale drag event as
+    # applied when the evaluated center EXACTLY equals the event's new_center.
     res = tc.put(
-        "/api/projects/p1/placement", json={"name": "U1", "pcbX": 5.678, "pcbY": -2.0}
+        "/api/projects/p1/placement",
+        json={"name": "U1", "pcbX": -10.242094258619503, "pcbY": -2.0},
     )
     assert res.status_code == 200
     src = (cwd / "index.circuit.tsx").read_text()
-    assert "pcbX={5.68}" in src and "pcbY={-2}" in src
+    assert "pcbX={-10.242094258619503}" in src and "pcbY={-2}" in src
     assert "pcbX={-13}" not in src  # old value replaced, not duplicated
     assert res.json()["source"] == src  # returned source matches disk
 

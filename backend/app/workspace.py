@@ -233,7 +233,15 @@ def set_placement(cwd: Path, name: str, coords: dict[str, float]) -> str:
     for prop, value in coords.items():
         if prop not in _PLACEMENT_PROPS:
             raise ValueError(f"unsupported placement prop: {prop}")
-        formatted = f"{prop}={{{format(round(value, 2), 'g')}}}"  # 12.0 -> 12
+        # EXACT round-trip precision, never rounded: the PCB viewer re-applies
+        # its stale drag events to every new circuitJson and only skips them
+        # when the component's center EXACTLY equals the event's new_center
+        # (core applyEditEvents' needsMovement check). A rounded write breaks
+        # that equality and the viewer re-shifts the part by the full drag
+        # delta after each Run. repr() is Python's shortest exact form; keep
+        # integral values as plain ints for readable source.
+        num = int(value) if float(value).is_integer() else value
+        formatted = f"{prop}={{{num!r}}}"
         prop_re = re.compile(rf"{prop}=(?:\{{[^{{}}]*\}}|\"[^\"]*\")")
         if prop_re.search(tag):
             tag = prop_re.sub(formatted, tag)
