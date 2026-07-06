@@ -40,6 +40,16 @@ export const api = {
       body: JSON.stringify({ title }),
     }).then(jsonOrThrow),
 
+  applyLayout: (
+    projectId: string,
+    edits: { name: string; pcbX?: number; pcbY?: number; pcbRotation?: number }[],
+  ): Promise<{ ok: boolean }> =>
+    fetch(`/api/projects/${projectId}/layout`, {
+      method: "POST",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ edits }),
+    }).then(jsonOrThrow),
+
   deleteProject: async (projectId: string): Promise<void> => {
     const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
     if (!res.ok) {

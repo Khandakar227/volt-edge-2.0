@@ -39,6 +39,10 @@ export default function App() {
   const [events, setEvents] = useState<ChatEvent[]>([])
   const [busy, setBusy] = useState(false)
   const [circuitJson, setCircuitJson] = useState<any[] | null>(null)
+  const [pendingEdits, setPendingEdits] = useState<
+    Record<string, { pcbX?: number; pcbY?: number; pcbRotation?: number }>
+  >({})
+  const [rerouting, setRerouting] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [leftWidth, setLeftWidth] = useState(() => {
@@ -157,6 +161,64 @@ export default function App() {
     localStorage.setItem(LEFT_WIDTH_KEY, String(w))
   }
 
+  // ---- Interactive PCB editing (move / rotate → re-route) ----
+
+  // Component names present in the current build (for the rotate control).
+  const componentNames: string[] = (circuitJson ?? [])
+    .filter((e) => e.type === "source_component" && e.name)
+    .map((e) => e.name)
+
+  // Resolve a dragged pcb_component_id back to its source component name.
+  const nameForPcbComponent = (pcbComponentId: string): string | null => {
+    if (!circuitJson) return null
+    const pc = circuitJson.find(
+      (e) => e.type === "pcb_component" && e.pcb_component_id === pcbComponentId,
+    )
+    if (!pc) return null
+    const sc = circuitJson.find(
+      (e) =>
+        e.type === "source_component" &&
+        e.source_component_id === pc.source_component_id,
+    )
+    return sc?.name ?? null
+  }
+
+  const handleEditEvent = (ev: any) => {
+    if (ev?.edit_event_type !== "edit_pcb_component_location") return
+    const name = nameForPcbComponent(ev.pcb_component_id)
+    if (!name || !ev.new_center) return
+    setPendingEdits((prev) => ({
+      ...prev,
+      [name]: { ...prev[name], pcbX: ev.new_center.x, pcbY: ev.new_center.y },
+    }))
+  }
+
+  const rotateComponent = (name: string) => {
+    setPendingEdits((prev) => {
+      const cur = prev[name]?.pcbRotation ?? 0
+      return { ...prev, [name]: { ...prev[name], pcbRotation: (cur + 90) % 360 } }
+    })
+  }
+
+  const reroute = async () => {
+    if (!activeId) return
+    const edits = Object.entries(pendingEdits).map(([name, v]) => ({ name, ...v }))
+    if (edits.length === 0) return
+    setRerouting(true)
+    try {
+      await api.applyLayout(activeId, edits)
+      await refreshCircuit(activeId)
+      setPendingEdits({})
+    } catch (e: any) {
+      setEvents((prev) => [
+        ...prev,
+        { type: "error", data: { message: `re-route failed: ${e.message}` }, ts: Date.now() },
+      ])
+    } finally {
+      setRerouting(false)
+    }
+  }
+
   return (
     <div className="flex h-full w-full">
       <SessionSidebar
@@ -189,6 +251,12 @@ export default function App() {
               circuitJson={circuitJson}
               webglAvailable={WEBGL_AVAILABLE}
               availableTabs={AVAILABLE_TABS}
+              onEditEvent={handleEditEvent}
+              componentNames={componentNames}
+              onRotate={rotateComponent}
+              pendingCount={Object.keys(pendingEdits).length}
+              rerouting={rerouting}
+              onReroute={reroute}
             />
           }
         />
