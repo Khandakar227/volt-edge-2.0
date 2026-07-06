@@ -36,3 +36,11 @@ class CheckpointRecord(SQLModel, table=True):
     version: int
     summary: str
     ts: datetime = Field(default_factory=utcnow)
+
+
+class EventRecord(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    project_id: str = Field(index=True)
+    event_type: str
+    data: str  # JSON-encoded event payload
+    ts: datetime = Field(default_factory=utcnow)

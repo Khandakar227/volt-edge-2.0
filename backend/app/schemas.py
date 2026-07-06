@@ -25,5 +25,11 @@ class MessageOut(BaseModel):
     ts: datetime
 
 
+class EventOut(BaseModel):
+    type: str
+    data: dict
+    ts: datetime
+
+
 class FsMapOut(BaseModel):
     files: dict[str, str]

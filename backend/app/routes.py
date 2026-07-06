@@ -14,8 +14,15 @@ from . import workspace
 from .config import settings
 from .db import db_session
 from .events import bus
-from .models import MessageRecord, Project
-from .schemas import CreateProjectRequest, FsMapOut, MessageOut, MessageRequest, ProjectOut
+from .models import EventRecord, MessageRecord, Project
+from .schemas import (
+    CreateProjectRequest,
+    EventOut,
+    FsMapOut,
+    MessageOut,
+    MessageRequest,
+    ProjectOut,
+)
 from .sessions import manager
 
 router = APIRouter()
@@ -80,6 +87,25 @@ async def get_messages(project_id: str):
             .order_by(MessageRecord.ts)
         ).all()
     return [MessageOut(role=r.role, content=r.content, ts=r.ts) for r in records]
+
+
+@router.get("/projects/{project_id}/events/history", response_model=list[EventOut])
+async def get_event_history(project_id: str):
+    _get_project(project_id)
+    with db_session() as db:
+        records = db.exec(
+            select(EventRecord)
+            .where(EventRecord.project_id == project_id)
+            .order_by(EventRecord.id)
+        ).all()
+    out: list[EventOut] = []
+    for r in records:
+        try:
+            data = json.loads(r.data)
+        except (ValueError, TypeError):
+            continue  # skip malformed rows defensively
+        out.append(EventOut(type=r.event_type, data=data, ts=r.ts))
+    return out
 
 
 @router.post("/projects/{project_id}/message", status_code=202)

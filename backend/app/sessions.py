@@ -6,6 +6,7 @@ newer build artifact, a `checkpoint` event is emitted and persisted.
 """
 
 import asyncio
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -18,7 +19,7 @@ from .agent import build_options, map_message
 from .config import settings
 from .db import db_session
 from .events import bus
-from .models import CheckpointRecord, MessageRecord, Project, SessionRecord
+from .models import CheckpointRecord, EventRecord, MessageRecord, Project, SessionRecord
 from .workspace import circuit_json_mtime
 
 logger = logging.getLogger("voltedge.sessions")
@@ -82,6 +83,7 @@ class SessionManager:
         session = await self.get_or_create(project)
         async with session.lock:
             self._persist_message(project.id, "user", text)
+            self._persist_event(project.id, "user", {"text": text})
             assistant_chunks: list[str] = []
             try:
                 await session.client.query(text)
@@ -90,6 +92,7 @@ class SessionManager:
                         if event_type == "assistant_text":
                             assistant_chunks.append(data["text"])
                         await bus.publish(project.id, event_type, data)
+                        self._persist_event(project.id, event_type, data)
                         if event_type == "tool_result":
                             await self._maybe_checkpoint(session)
                         if event_type == "done" and data.get("session_id"):
@@ -101,6 +104,7 @@ class SessionManager:
             except Exception as exc:  # surface, don't swallow
                 logger.exception("turn failed for project %s", project.id)
                 await bus.publish(project.id, "error", {"message": str(exc)[:500]})
+                self._persist_event(project.id, "error", {"message": str(exc)[:500]})
             finally:
                 if assistant_chunks:
                     self._persist_message(
@@ -128,10 +132,26 @@ class SessionManager:
             "checkpoint",
             {"version": session.checkpoint_version, "summary": summary},
         )
+        self._persist_event(
+            session.project_id,
+            "checkpoint",
+            {"version": session.checkpoint_version, "summary": summary},
+        )
 
     def _persist_message(self, project_id: str, role: str, content: str) -> None:
         with db_session() as db:
             db.add(MessageRecord(project_id=project_id, role=role, content=content))
+            db.commit()
+
+    def _persist_event(self, project_id: str, event_type: str, data: dict) -> None:
+        with db_session() as db:
+            db.add(
+                EventRecord(
+                    project_id=project_id,
+                    event_type=event_type,
+                    data=json.dumps(data),
+                )
+            )
             db.commit()
 
     def _store_claude_session_id(self, project_id: str, claude_session_id: str) -> None:
