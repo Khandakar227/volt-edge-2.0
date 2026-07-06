@@ -1,0 +1,5 @@
+1. Reroute is a fucking hell.
+2. Schematic component moving does not move the wire connections.
+3. every workspace has its own node modules, creating all the files takes so much time, can't It just use global node modules that will make the initial scaffolding faster
+
+Please please please plan first, before executing. Provide a proper plan before coding

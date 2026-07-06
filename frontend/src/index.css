@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url('https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght,GRAD@0,17..18,400..700,-50;1,17..18,400..700,-50&display=swap');
+@import "tailwindcss";
 
 :root {
   --bg: #0f1115;
@@ -81,4 +81,8 @@ body {
 .prose-chat a {
   color: #60a5fa;
   text-decoration: underline;
+}
+
+div[type="button"] {
+  color: black;
 }

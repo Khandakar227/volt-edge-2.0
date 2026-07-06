@@ -5,7 +5,7 @@ export function ThinkingAccordion({ text }: { text: string }) {
   return (
     <Accordion
       header={
-        <span className="flex items-center gap-1.5 italic">
+        <span className="flex items-center gap-1.5 italic leading-relaxed text-[var(--muted)]">
           <Brain size={12} /> thinking
         </span>
       }
