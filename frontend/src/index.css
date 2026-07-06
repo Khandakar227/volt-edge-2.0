@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0f1115;
+  --panel: #161922;
+  --panel-2: #1e2536;
+  --border: #262b38;
+  --text: #e6e8ec;
+  --muted: #8b90a0;
+  --accent: #2563eb;
+}
+
+html, body, #root { height: 100%; margin: 0; }
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Accordion open/close animation (Radix data-state driven) */
+@keyframes acc-down { from { height: 0 } to { height: var(--radix-accordion-content-height) } }
+@keyframes acc-up { from { height: var(--radix-accordion-content-height) } to { height: 0 } }
+.acc-content[data-state="open"] { animation: acc-down 160ms ease-out; }
+.acc-content[data-state="closed"] { animation: acc-up 160ms ease-out; }
+
+/* Rendered-markdown styling for assistant messages */
+.prose-chat p { margin: 0.35rem 0; }
+.prose-chat ul, .prose-chat ol { margin: 0.35rem 0; padding-left: 1.25rem; }
+.prose-chat code { background: var(--panel); padding: 0 4px; border-radius: 4px; font-size: 0.85em; }
+.prose-chat pre { background: var(--panel); padding: 8px; border-radius: 6px; overflow-x: auto; }
+.prose-chat a { color: #60a5fa; text-decoration: underline; }
