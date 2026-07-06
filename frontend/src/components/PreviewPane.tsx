@@ -1,4 +1,7 @@
 import { RunFrame } from "@tscircuit/runframe/runner"
+// Self-contained eval worker (worker code inlined as a blob URL) so RunFrame
+// evaluates locally instead of fetching from unpkg.com (which is CORS-blocked).
+import evalWebWorkerBlobUrl from "@tscircuit/eval/blob-url"
 
 /**
  * Renders the circuit with the tscircuit RunFrame runner: it evaluates the
@@ -34,6 +37,7 @@ export function PreviewPane({
         defaultActiveTab="pcb"
         showRunButton
         evalVersion={String(evalVersion)}
+        evalWebWorkerBlobUrl={evalWebWorkerBlobUrl}
       />
     </div>
   )
