@@ -27,6 +27,30 @@ const AVAILABLE_TABS = WEBGL_AVAILABLE
 
 const LEFT_WIDTH_KEY = "voltedge.leftWidth"
 
+// The eval worker never reads manual-edits.json on its own — it applies manual
+// PCB/schematic placements ONLY through the board's `manualEdits` prop
+// (RootCircuit.getManualPlacementForComponent). Agent-authored boards aren't
+// wired for it, so drags would never persist through a Run. Wire the copy of
+// index.circuit.tsx that RunFrame evaluates (the on-disk file stays untouched):
+// import manual-edits.json and pass it to the first <board>. Verified in-browser
+// against the real eval engine — without this the component stays at (0,0); with
+// it, it moves to the manual placement.
+function wireManualEdits(
+  files: Record<string, string>,
+): Record<string, string> {
+  const src = files["index.circuit.tsx"]
+  // Skip if there's no entry, no board, or it's already wired (agent or us).
+  if (!src || /manualEdits/.test(src) || !/<board/.test(src)) return files
+  let wired = src
+  if (!/from\s+["']\.\/manual-edits\.json["']/.test(wired)) {
+    wired = `import __manualEdits from "./manual-edits.json"\n` + wired
+  }
+  // Inject the prop on the first <board> (handles `<board ...>`, `<board>`,
+  // `<board/>`). Non-global: only the root board.
+  wired = wired.replace(/<board(\s|>|\/)/, `<board manualEdits={__manualEdits}$1`)
+  return { ...files, "index.circuit.tsx": wired }
+}
+
 /** Session title derived from the first prompt (trimmed to a readable length). */
 function deriveTitle(text: string): string {
   const t = text.trim().replace(/\s+/g, " ")
@@ -67,7 +91,8 @@ export default function App() {
       // Always keep manual-edits.json present as a key so later content updates
       // don't change PreviewPane's remount key (activeKey is keyed on filenames).
       if (files["manual-edits.json"] == null) files["manual-edits.json"] = "{}"
-      setFsMap(files)
+      // Wire the board to consume manual-edits.json so drags persist through Run.
+      setFsMap(wireManualEdits(files))
       setEvalVersion((v) => v + 1)
       // The eval reads manual-edits.json from the fsMap; seed our running merge
       // base from that file so subsequent drags accumulate onto it.
