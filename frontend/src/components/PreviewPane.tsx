@@ -32,7 +32,7 @@ export function PreviewPane({
       <RunFrame
         key={activeKey(fsMap)}
         fsMap={fsMap}
-        entrypoint="index.circuit.tsx"
+        mainComponentPath="index.circuit.tsx"
         availableTabs={availableTabs as any}
         defaultActiveTab="pcb"
         showRunButton
