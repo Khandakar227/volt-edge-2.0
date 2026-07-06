@@ -202,29 +202,6 @@ def _mount_skills(cwd: Path) -> None:
         shutil.copytree(src, target)
 
 
-async def build(cwd: Path) -> tuple[int, str]:
-    """Run `tsci build` in the workspace; return (returncode, combined output)."""
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            "tsci",
-            "build",
-            cwd=str(cwd),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            env={"PATH": settings.agent_path, "HOME": str(Path.home())},
-        )
-    except FileNotFoundError as exc:
-        raise ScaffoldError("`tsci` not found on PATH") from exc
-    try:
-        out, _ = await asyncio.wait_for(
-            proc.communicate(), timeout=settings.scaffold_timeout_s
-        )
-    except asyncio.TimeoutError:
-        proc.kill()
-        raise ScaffoldError("tsci build timed out")
-    return proc.returncode, out.decode(errors="replace")
-
-
 def remove(cwd: Path) -> None:
     """Delete a project's workspace directory (best-effort)."""
     shutil.rmtree(cwd, ignore_errors=True)

@@ -40,16 +40,6 @@ export const api = {
       body: JSON.stringify({ title }),
     }).then(jsonOrThrow),
 
-  applyLayout: (
-    projectId: string,
-    edits: { name: string; pcbX?: number; pcbY?: number; pcbRotation?: number }[],
-  ): Promise<{ ok: boolean }> =>
-    fetch(`/api/projects/${projectId}/layout`, {
-      method: "POST",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ edits }),
-    }).then(jsonOrThrow),
-
   deleteProject: async (projectId: string): Promise<void> => {
     const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
     if (!res.ok) {
@@ -69,12 +59,6 @@ export const api = {
     fetch(`/api/projects/${projectId}/interrupt`, { method: "POST" }).then(
       jsonOrThrow,
     ),
-
-  getCircuitJson: async (projectId: string): Promise<any[] | null> => {
-    const res = await fetch(`/api/projects/${projectId}/circuit-json`)
-    if (res.status === 404) return null
-    return jsonOrThrow(res)
-  },
 
   getMessages: (
     projectId: string,

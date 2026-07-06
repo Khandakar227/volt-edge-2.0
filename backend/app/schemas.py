@@ -13,17 +13,6 @@ class RenameProjectRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
-class LayoutEdit(BaseModel):
-    name: str = Field(min_length=1)
-    pcbX: float | None = None
-    pcbY: float | None = None
-    pcbRotation: float | None = None
-
-
-class LayoutRequest(BaseModel):
-    edits: list[LayoutEdit] = Field(min_length=1)
-
-
 class ProjectOut(BaseModel):
     id: str
     title: str

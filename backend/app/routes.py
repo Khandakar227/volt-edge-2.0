@@ -6,11 +6,10 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
 from sqlmodel import delete, select
 
-from . import layout, workspace
+from . import workspace
 from .config import settings
 from .db import db_session
 from .events import bus
@@ -19,7 +18,6 @@ from .schemas import (
     CreateProjectRequest,
     EventOut,
     FsMapOut,
-    LayoutRequest,
     MessageOut,
     MessageRequest,
     ProjectOut,
@@ -102,15 +100,6 @@ async def get_fsmap(project_id: str):
     return FsMapOut(files=workspace.read_fsmap(Path(project.cwd)))
 
 
-@router.get("/projects/{project_id}/circuit-json")
-async def get_circuit_json(project_id: str):
-    project = _get_project(project_id)
-    path = workspace.circuit_json_path(Path(project.cwd))
-    if path is None:
-        raise HTTPException(404, "no build artifact yet")
-    return FileResponse(path, media_type="application/json")
-
-
 @router.get("/projects/{project_id}/messages", response_model=list[MessageOut])
 async def get_messages(project_id: str):
     _get_project(project_id)
@@ -160,30 +149,6 @@ async def put_manual_edits(project_id: str, body: dict):
     project = _get_project(project_id)
     path = Path(project.cwd) / "manual-edits.json"
     path.write_text(json.dumps(body, indent=2))
-    return {"ok": True}
-
-
-@router.post("/projects/{project_id}/layout")
-async def apply_layout(project_id: str, body: LayoutRequest):
-    """Apply UI move/rotate edits to the circuit source and rebuild (re-route)."""
-    project = _get_project(project_id)
-    if manager.is_busy(project_id):
-        raise HTTPException(409, "a turn is already running for this project")
-    cwd = Path(project.cwd)
-    entry = cwd / "index.circuit.tsx"
-    if not entry.exists():
-        raise HTTPException(400, "no circuit entry file to edit")
-    try:
-        new_source = layout.apply_layout_edits(
-            entry.read_text(), [e.model_dump() for e in body.edits]
-        )
-    except layout.LayoutEditError as exc:
-        raise HTTPException(422, str(exc))
-    entry.write_text(new_source)
-    rc, log = await workspace.build(cwd)
-    if rc != 0:
-        raise HTTPException(500, f"rebuild failed: {log[-400:]}")
-    manager.note_external_build(project_id)
     return {"ok": True}
 
 
