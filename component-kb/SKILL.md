@@ -1,6 +1,6 @@
 ---
 name: components
-description: Ready-made, dimensionally-correct tscircuit parts for common dev boards and breakout modules (ESP32-C3 SuperMini, GY-521/MPU-6050, STM32 Blue Pill, Arduino Uno shield). Use BEFORE modeling any of these parts yourself — import the library component instead of guessing a footprint.
+description: Ready-made, dimensionally-correct tscircuit parts for common dev boards and breakout modules (ESP32-C3 SuperMini, GY-521/MPU-6050, STM32 Blue Pill, Arduino Nano, Arduino Uno shield). Use BEFORE modeling any of these parts yourself — import the library component instead of guessing a footprint.
 allowed-tools: Read, Grep, Glob, Bash
 ---
 
@@ -29,6 +29,7 @@ single `<chip>`, so it renders as ONE schematic symbol with the correct PCB.
 | `esp32-c3-supermini` | `Esp32C3SuperMini` | 18 × 22.52 | 16 THT pins, two rows 15.24mm apart. Pins: 5V, 3V3, GND, IO0–IO10, RXD0, TXD0. I²C default SDA=IO8, SCL=IO9. |
 | `mpu6050-gy521` | `Mpu6050Gy521` | 21.2 × 16.4 | GY-521 module, single 8-pin header. Pins: VCC, GND, SCL, SDA, XDA, XCL, AD0, INT. |
 | `stm32-bluepill` | `Stm32BluePill` | 53.34 × 22.86 | STM32F103C8T6, two 20-pin rows + 4-pin SWD. Verify pin order vs silkscreen. |
+| `arduino-nano` | `ArduinoNano` | 18 × 45 | ATmega328P, 30 THT pins (DIP-30W, two rows 15.24mm apart). Pins: D0–D13, A0–A7, 5V, 3V3, VIN, AREF, RESET×2, GND×2. D0/D1 also wire as RX0/TX1. |
 | `arduino-uno-shield` | `ArduinoUnoShield` | 68.6 × 53.4 | Arduino Uno header footprint (D0–D13, A0–A5, power). |
 
 ## Usage
