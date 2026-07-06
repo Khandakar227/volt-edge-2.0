@@ -20,6 +20,7 @@ from .config import settings
 from .db import db_session
 from .events import bus
 from .models import CheckpointRecord, EventRecord, MessageRecord, Project, SessionRecord
+from . import workspace
 from .workspace import circuit_json_mtime
 
 logger = logging.getLogger("voltedge.sessions")
@@ -47,6 +48,13 @@ class SessionManager:
                 return session
 
             cwd = Path(project.cwd)
+            # Self-heal: the workspace dir can go missing (e.g. manually deleted)
+            # while its DB row survives. The SDK refuses to connect to a missing
+            # cwd, so re-scaffold a blank workspace before connecting.
+            if not cwd.exists():
+                logger.warning("workspace %s missing; re-scaffolding", cwd)
+                await workspace.scaffold(cwd)
+
             client = ClaudeSDKClient(options=build_options(cwd))
             await client.connect()
 
@@ -80,10 +88,21 @@ class SessionManager:
 
     async def run_turn(self, project: Project, text: str) -> None:
         """Drive one agent turn; relay SDK messages as SSE events (PLAN §4)."""
-        session = await self.get_or_create(project)
+        # Record the user's message up front so it survives even if the turn
+        # cannot start (e.g. the agent session fails to connect).
+        self._persist_message(project.id, "user", text)
+        self._persist_event(project.id, "user", {"text": text})
+
+        try:
+            session = await self.get_or_create(project)
+        except Exception as exc:  # turn-start failure — surface, don't hang the UI
+            logger.exception("could not start turn for project %s", project.id)
+            message = f"Could not start agent session: {str(exc)[:400]}"
+            await bus.publish(project.id, "error", {"message": message})
+            self._persist_event(project.id, "error", {"message": message})
+            return
+
         async with session.lock:
-            self._persist_message(project.id, "user", text)
-            self._persist_event(project.id, "user", {"text": text})
             assistant_chunks: list[str] = []
             try:
                 await session.client.query(text)

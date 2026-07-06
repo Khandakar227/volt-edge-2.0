@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { api, subscribeEvents, type ChatEvent, type Project } from "./api"
 import { SessionSidebar } from "./components/SessionSidebar"
 import { ChatPanel } from "./components/ChatPanel"
@@ -48,7 +48,12 @@ export default function App() {
   }, [])
 
   // Bootstrap: list sessions, open the most recent (or create one).
+  // Guard against React StrictMode's double-invoke, which would otherwise
+  // create two projects on first load.
+  const booted = useRef(false)
   useEffect(() => {
+    if (booted.current) return
+    booted.current = true
     ;(async () => {
       try {
         let list = await api.listProjects()

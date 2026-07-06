@@ -21,15 +21,21 @@ async def scaffold(cwd: Path) -> None:
     """Create a tscircuit workspace: `tsci init -y`, pin tscircuit version, mount skill."""
     cwd.mkdir(parents=True, exist_ok=True)
 
-    proc = await asyncio.create_subprocess_exec(
-        "tsci",
-        "init",
-        "-y",
-        cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-        env={"PATH": settings.agent_path, "HOME": str(Path.home())},
-    )
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "tsci",
+            "init",
+            "-y",
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env={"PATH": settings.agent_path, "HOME": str(Path.home())},
+        )
+    except FileNotFoundError as exc:
+        raise ScaffoldError(
+            "`tsci` not found on PATH — install the tscircuit CLI "
+            "(`npm install -g tscircuit`) and `bun`"
+        ) from exc
     try:
         out, _ = await asyncio.wait_for(
             proc.communicate(), timeout=settings.scaffold_timeout_s
