@@ -85,6 +85,13 @@ class SessionManager:
             except Exception:  # best-effort teardown
                 logger.warning("failed to disconnect session %s", project_id, exc_info=True)
 
+    def note_external_build(self, project_id: str) -> None:
+        """Sync a cached session's build mtime after a non-agent rebuild (e.g. a
+        UI layout edit), so the next turn doesn't emit a spurious checkpoint."""
+        session = self._sessions.get(project_id)
+        if session is not None:
+            session.last_circuit_mtime = circuit_json_mtime(session.cwd)
+
     def is_busy(self, project_id: str) -> bool:
         session = self._sessions.get(project_id)
         return session is not None and session.lock.locked()
