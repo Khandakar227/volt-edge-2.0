@@ -46,6 +46,14 @@ export default function App() {
   // to its component name so the drag can be written into the source.
   const circuitJsonRef = useRef<any>([])
   const activeIdRef = useRef<string | null>(null)
+  // The PCB viewer keeps every drag event since mount in internal state and
+  // re-applies them (delta-based) to each new eval result — after 2+ drags the
+  // replay deviates the component by its total travel. There is no prop to
+  // clear that state, so after a Run that followed a drag we remount RunFrame
+  // (viewerEpoch in its key): the remount re-evals once more and the fresh
+  // viewers render pure eval output.
+  const [viewerEpoch, setViewerEpoch] = useState(0)
+  const dragsSinceEvalRef = useRef(false)
   const [collapsed, setCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [leftWidth, setLeftWidth] = useState(() => {
@@ -106,6 +114,7 @@ export default function App() {
     void api
       .setPlacement(id, { name, ...coords })
       .then(({ source }) => {
+        dragsSinceEvalRef.current = true
         setFsMap((prev) =>
           prev ? { ...prev, "index.circuit.tsx": source } : prev,
         )
@@ -113,6 +122,15 @@ export default function App() {
       .catch(() => {
         /* keep the in-viewer position; the next fsMap load resyncs */
       })
+  }, [])
+
+  // A Run finished. If any drag happened since the last eval, the viewers'
+  // internal edit-event replay is now stale — remount them (see viewerEpoch).
+  // The flag is cleared first so the remount's own eval doesn't loop.
+  const onRenderFinished = useCallback(() => {
+    if (!dragsSinceEvalRef.current) return
+    dragsSinceEvalRef.current = false
+    setViewerEpoch((e) => e + 1)
   }, [])
 
   // Keep a ref of the active id so the RunFrame edit callback (captured once by
@@ -260,9 +278,11 @@ export default function App() {
             <PreviewPane
               fsMap={fsMap}
               evalVersion={evalVersion}
+              viewerEpoch={viewerEpoch}
               availableTabs={AVAILABLE_TABS}
               onEditEvent={onEditEvent}
               onCircuitJsonChange={onCircuitJsonChange}
+              onRenderFinished={onRenderFinished}
             />
           }
         />

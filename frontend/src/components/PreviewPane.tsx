@@ -11,15 +11,21 @@ import evalWebWorkerBlobUrl from "@tscircuit/eval/blob-url"
 export function PreviewPane({
   fsMap,
   evalVersion,
+  viewerEpoch,
   availableTabs,
   onEditEvent,
   onCircuitJsonChange,
+  onRenderFinished,
 }: {
   fsMap: Record<string, string> | null
   evalVersion: number
+  /** Bumped after a Run that followed a drag — remounts RunFrame so the PCB
+   * viewer's internal (never-cleared) edit-event replay can't deviate parts. */
+  viewerEpoch: number
   availableTabs: readonly string[]
   onEditEvent: (ev: any) => void
   onCircuitJsonChange: (cj: any) => void
+  onRenderFinished: () => void
 }) {
   const hasCircuit = !!fsMap && !!fsMap["index.circuit.tsx"]
 
@@ -34,7 +40,7 @@ export function PreviewPane({
   return (
     <div className="h-full min-h-0 min-w-0 bg-white">
       <RunFrame
-        key={activeKey(fsMap)}
+        key={`${activeKey(fsMap)}:${viewerEpoch}`}
         fsMap={fsMap}
         mainComponentPath="index.circuit.tsx"
         availableTabs={availableTabs as any}
@@ -44,6 +50,7 @@ export function PreviewPane({
         evalWebWorkerBlobUrl={evalWebWorkerBlobUrl}
         onEditEvent={onEditEvent}
         onCircuitJsonChange={onCircuitJsonChange}
+        onRenderFinished={onRenderFinished}
       />
     </div>
   )
