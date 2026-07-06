@@ -48,6 +48,7 @@ async def scaffold(cwd: Path) -> None:
 
     _pin_tscircuit_version(cwd)
     _mount_skills(cwd)
+    _install_parts_library(cwd)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
@@ -61,6 +62,18 @@ def _pin_tscircuit_version(cwd: Path) -> None:
         if deps and deps.get("tscircuit") == "latest":
             deps["tscircuit"] = settings.tscircuit_version
     pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
+
+
+def _install_parts_library(cwd: Path) -> None:
+    """Copy the component parts library into <cwd>/parts so circuits can
+    `import { X } from "./parts/<name>"`."""
+    src = settings.component_kb_dir / "parts"
+    if not src.exists():
+        return
+    target = cwd / "parts"
+    target.mkdir(parents=True, exist_ok=True)
+    for part in src.glob("*.tsx"):
+        shutil.copy(part, target / part.name)
 
 
 def _mount_skills(cwd: Path) -> None:
