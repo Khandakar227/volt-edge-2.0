@@ -43,13 +43,17 @@ export default function App() {
   // bump evalVersion to force a re-eval after the agent changes files.
   const [fsMap, setFsMap] = useState<Record<string, string> | null>(null)
   const [evalVersion, setEvalVersion] = useState(0)
-  // Manual PCB/schematic edits (drag/rotate). Held as a controlled list so
-  // RunFrame re-applies them after each Run (fixes schematic snap-back), and
-  // persisted to the workspace's manual-edits.json so they survive reloads.
-  const [editEvents, setEditEvents] = useState<any[]>([])
+  // Manual PCB/schematic edits (drag/rotate). RunFrame's viewers render purely
+  // from the evaluated circuitJson — the `editEvents` prop reaches neither the
+  // PCB nor the schematic viewer — so the ONLY way a drag survives a Run is to
+  // fold it into manual-edits.json inside the fsMap the eval reads. We keep a
+  // running manual-edits object, write it back into fsMap on every edit (Run
+  // then re-evaluates + re-autoroutes at the new position), and debounce-persist
+  // it to the workspace so edits also survive a reload.
   const circuitJsonRef = useRef<any>([])
   const manualEditsRef = useRef<any>({})
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const activeIdRef = useRef<string | null>(null)
   const [collapsed, setCollapsed] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
   const [leftWidth, setLeftWidth] = useState(() => {
@@ -60,15 +64,15 @@ export default function App() {
   const loadFsMap = useCallback(async (id: string) => {
     try {
       const files = await api.getFsMap(id)
+      // Always keep manual-edits.json present as a key so later content updates
+      // don't change PreviewPane's remount key (activeKey is keyed on filenames).
+      if (files["manual-edits.json"] == null) files["manual-edits.json"] = "{}"
       setFsMap(files)
       setEvalVersion((v) => v + 1)
-      // RunFrame applies the persisted manual-edits.json from the fsMap; start
-      // the session's live edit list empty and seed our merge base from the file.
-      setEditEvents([])
+      // The eval reads manual-edits.json from the fsMap; seed our running merge
+      // base from that file so subsequent drags accumulate onto it.
       try {
-        manualEditsRef.current = files["manual-edits.json"]
-          ? JSON.parse(files["manual-edits.json"])
-          : {}
+        manualEditsRef.current = JSON.parse(files["manual-edits.json"])
       } catch {
         manualEditsRef.current = {}
       }
@@ -81,28 +85,39 @@ export default function App() {
     circuitJsonRef.current = cj
   }, [])
 
+  // A drag/rotate finished: fold it into manual-edits.json and write that back
+  // into fsMap so the next Run re-evaluates + re-autoroutes at the new position.
+  // showRunButton gates auto-eval, so this does NOT trigger an immediate re-run.
   const onEditEvent = useCallback((ev: any) => {
-    setEditEvents((prev) => [...prev, ev])
-  }, [])
-
-  // Debounced persist of accumulated edits to the workspace's manual-edits.json.
-  useEffect(() => {
-    if (!activeId || editEvents.length === 0) return
+    let updated: any
+    try {
+      updated = applyEditEventsToManualEditsFile({
+        circuitJson: circuitJsonRef.current ?? [],
+        editEvents: [ev],
+        manualEditsFile: manualEditsRef.current ?? {},
+      })
+    } catch {
+      return // malformed edit — nothing safe to persist
+    }
+    manualEditsRef.current = updated
+    const content = JSON.stringify(updated, null, 2)
+    setFsMap((prev) =>
+      prev ? { ...prev, "manual-edits.json": content } : prev,
+    )
+    // Debounced persist to the workspace so edits also survive a reload.
+    const id = activeIdRef.current
+    if (!id) return
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
-      try {
-        const updated = applyEditEventsToManualEditsFile({
-          circuitJson: circuitJsonRef.current ?? [],
-          editEvents,
-          manualEditsFile: manualEditsRef.current ?? {},
-        })
-        manualEditsRef.current = updated
-        void api.putManualEdits(activeId, updated)
-      } catch {
-        /* keep edits in-memory even if persistence fails */
-      }
+      void api.putManualEdits(id, updated)
     }, 600)
-  }, [editEvents, activeId])
+  }, [])
+
+  // Keep a ref of the active id so the RunFrame edit callback (captured once by
+  // RunFrame) always persists to the current session, not a stale closure.
+  useEffect(() => {
+    activeIdRef.current = activeId
+  }, [activeId])
 
   // Load a session's rich transcript + current source files.
   const loadSession = useCallback(
@@ -183,7 +198,7 @@ export default function App() {
     setActiveId(null)
     setEvents([])
     setFsMap(null)
-    setEditEvents([])
+    manualEditsRef.current = {}
     setBusy(false)
   }
 
@@ -245,7 +260,6 @@ export default function App() {
               fsMap={fsMap}
               evalVersion={evalVersion}
               availableTabs={AVAILABLE_TABS}
-              editEvents={editEvents}
               onEditEvent={onEditEvent}
               onCircuitJsonChange={onCircuitJsonChange}
             />

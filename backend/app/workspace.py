@@ -26,6 +26,11 @@ _TEMPLATE_BASE_FILES = (
 # the agent overwrites it on the first prompt.
 _DEFAULT_ENTRY = "export default () => <board width=\"30mm\" height=\"30mm\" />\n"
 
+# RunFrame reads manual PCB/schematic placements from manual-edits.json at eval
+# time; the frontend writes drag/rotate edits here (PUT /manual-edits). Seed an
+# empty one so the file always exists and shows up in the fsMap from the start.
+_DEFAULT_MANUAL_EDITS = "{}\n"
+
 # Source files exposed to the browser (fsMap). node_modules/dist/dotdirs excluded.
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
 _FSMAP_EXCLUDED_DIRS = {"node_modules", "dist", ".git", ".claude", ".agents", ".tscircuit"}
@@ -111,6 +116,7 @@ async def scaffold(cwd: Path) -> None:
     else:
         await _tsci_init(cwd)
         (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)  # replace tsci's R+C starter
+        (cwd / "manual-edits.json").write_text(_DEFAULT_MANUAL_EDITS)
     _mount_skills(cwd)
     _install_parts_library(cwd)
 
@@ -160,6 +166,7 @@ def _fast_scaffold(cwd: Path, template: Path) -> None:
         pkg["name"] = cwd.name
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
     (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
+    (cwd / "manual-edits.json").write_text(_DEFAULT_MANUAL_EDITS)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
