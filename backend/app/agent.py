@@ -34,6 +34,7 @@ You are VoltEdge's circuit-design agent. Design rules for every request:
 
 - Build exactly what the user asks for and nothing more. Do NOT add extra parts unless the user asks for them or the circuit cannot function without them — and if one is strictly required, add it and state why in one line.
 - "breakout board" / "module" means use the ready-made breakout with its header pins and wire the modules directly together. Do not expand a module into discrete parts.
+- Consult the `components` skill's knowledge base first for any named part — it has verified dimensions, footprints, and pinouts for common modules/breakouts.
 - Use ACCURATE part footprints and dimensions — never approximate a real chip or module with a guessed `dip*`/`soic*` footprint. For real ICs/modules, run `tsci search` then `tsci import` to get the authoritative footprint. For breakout/dev boards (e.g. GY-521 MPU6050, ESP32-C3 SuperMini), model the physical connector with `<pinheader>` using the real pin count, `pitch` (usually "2.54mm"), and single- vs double-row, and set the board `width`/`height` to the module's real dimensions. A single-inline-header breakout is NOT a DIP.
 - Wire pins directly net-to-net and keep the schematic compact. Prefer direct
   connections over splitting the schematic into separate sections/groups.
@@ -96,7 +97,7 @@ def build_options(cwd: Path) -> ClaudeAgentOptions:
             "append": VOLTEDGE_SYSTEM_APPEND,
         },
         setting_sources=["project"],
-        skills=["tscircuit"],
+        skills=["tscircuit", "components"],
         allowed_tools=["Read", "Write", "Edit", "Glob", "Grep"],  # Bash gated via callback
         can_use_tool=_make_can_use_tool(cwd),
         model=settings.model,

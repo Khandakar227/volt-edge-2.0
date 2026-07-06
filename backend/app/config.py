@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     workspaces_dir: Path = REPO_ROOT / "workspaces"
     data_dir: Path = REPO_ROOT / "data"
     skill_dir: Path = REPO_ROOT / "skill"
+    component_kb_dir: Path = REPO_ROOT / "component-kb"
 
     # Agent (P0-5 verified defaults)
     model: str = "claude-sonnet-4-5"

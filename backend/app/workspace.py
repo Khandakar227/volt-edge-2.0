@@ -47,7 +47,7 @@ async def scaffold(cwd: Path) -> None:
         raise ScaffoldError(f"tsci init failed: {out.decode(errors='replace')[-500:]}")
 
     _pin_tscircuit_version(cwd)
-    _mount_skill(cwd)
+    _mount_skills(cwd)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
@@ -63,12 +63,19 @@ def _pin_tscircuit_version(cwd: Path) -> None:
     pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
 
 
-def _mount_skill(cwd: Path) -> None:
-    """Copy the tscircuit skill into <cwd>/.claude/skills/tscircuit (P0-5 verified mount)."""
-    target = cwd / ".claude" / "skills" / "tscircuit"
-    if target.exists():
-        shutil.rmtree(target)
-    shutil.copytree(settings.skill_dir, target)
+def _mount_skills(cwd: Path) -> None:
+    """Copy the agent skills into <cwd>/.claude/skills/<name> (P0-5 verified mount)."""
+    mounts = {
+        "tscircuit": settings.skill_dir,
+        "components": settings.component_kb_dir,
+    }
+    for name, src in mounts.items():
+        if not src.exists():
+            continue
+        target = cwd / ".claude" / "skills" / name
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(src, target)
 
 
 def remove(cwd: Path) -> None:
