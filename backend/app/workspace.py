@@ -13,19 +13,17 @@ from .config import settings
 logger = logging.getLogger("voltedge.workspace")
 
 # Files (besides node_modules) copied from the template into each new workspace.
-# NOTE: index.circuit.tsx is intentionally excluded — tsci's starter is a
-# resistor+capacitor example; we write our own clean entry instead (below).
+# NOTE: index.circuit.tsx is intentionally excluded. We deliberately leave the
+# entry file ABSENT from a fresh workspace: the agent's first turn creates it
+# with Write. If a blank starter existed, the SDK's read-before-write guard
+# would reject that Write ("File has not been read yet") on every first prompt,
+# forcing a wasted Read/Edit recovery. No file → clean create, no error.
 _TEMPLATE_BASE_FILES = (
     "package.json",
     "tsconfig.json",
     "bun.lock",
     "tscircuit.config.json",
 )
-
-# The canonical entry file rendered by the frontend and built by tsci. Kept as a
-# minimal empty board so a fresh (un-prompted) workspace shows nothing misleading;
-# the agent overwrites it on the first prompt.
-_DEFAULT_ENTRY = "export default () => <board width=\"30mm\" height=\"30mm\" />\n"
 
 # Placement props a drag in the editor is allowed to rewrite (PUT /placement).
 _PLACEMENT_PROPS = ("pcbX", "pcbY", "schX", "schY")
@@ -114,7 +112,9 @@ async def scaffold(cwd: Path) -> None:
         )
     else:
         await _tsci_init(cwd)
-        (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)  # replace tsci's R+C starter
+        # Remove tsci's resistor+capacitor starter so the agent creates the entry
+        # itself (a pre-existing file would trip the SDK read-before-write guard).
+        (cwd / "index.circuit.tsx").unlink(missing_ok=True)
     _mount_skills(cwd)
     _install_parts_library(cwd)
 
@@ -163,7 +163,8 @@ def _fast_scaffold(cwd: Path, template: Path) -> None:
         pkg = json.loads(pkg_path.read_text())
         pkg["name"] = cwd.name
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
-    (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
+    # No index.circuit.tsx is written: the agent creates the entry on its first
+    # turn, avoiding the SDK's read-before-write guard on a pre-existing file.
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:

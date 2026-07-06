@@ -33,7 +33,10 @@ def test_fast_scaffold_hardlinks_node_modules(tmp_path):
     assert binlink.is_symlink()
     assert os.readlink(binlink) == "../pkg/x.js"  # symlink recreated, not hardlinked
 
-    assert (cwd / "index.circuit.tsx").exists()
+    # The entry is intentionally NOT created: the agent writes it on its first
+    # turn. A pre-existing file would trip the SDK read-before-write guard. This
+    # also verifies index.circuit.tsx is excluded from the copied template files.
+    assert not (cwd / "index.circuit.tsx").exists()
     assert (cwd / "tsconfig.json").exists()
     assert (cwd / "bun.lock").exists()
 
