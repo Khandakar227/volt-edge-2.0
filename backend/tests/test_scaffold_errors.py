@@ -16,7 +16,9 @@ def test_scaffold_missing_tsci_raises_scaffold_error(monkeypatch):
 
     monkeypatch.setattr(asyncio, "create_subprocess_exec", boom)
 
+    # Test the tsci init step directly — scaffold() takes the hardlink fast path
+    # when a template already exists and wouldn't invoke tsci at all.
     tmp = Path(tempfile.mkdtemp())
     with pytest.raises(workspace.ScaffoldError) as ei:
-        asyncio.run(workspace.scaffold(tmp))
+        asyncio.run(workspace._tsci_init(tmp))
     assert "tsci" in str(ei.value)

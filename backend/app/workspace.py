@@ -12,13 +12,19 @@ from .config import settings
 logger = logging.getLogger("voltedge.workspace")
 
 # Files (besides node_modules) copied from the template into each new workspace.
+# NOTE: index.circuit.tsx is intentionally excluded — tsci's starter is a
+# resistor+capacitor example; we write our own clean entry instead (below).
 _TEMPLATE_BASE_FILES = (
     "package.json",
     "tsconfig.json",
     "bun.lock",
     "tscircuit.config.json",
-    "index.circuit.tsx",
 )
+
+# The canonical entry file rendered by the frontend and built by tsci. Kept as a
+# minimal empty board so a fresh (un-prompted) workspace shows nothing misleading;
+# the agent overwrites it on the first prompt.
+_DEFAULT_ENTRY = "export default () => <board width=\"30mm\" height=\"30mm\" />\n"
 
 # Source files exposed to the browser (fsMap). node_modules/dist/dotdirs excluded.
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
@@ -104,6 +110,7 @@ async def scaffold(cwd: Path) -> None:
         )
     else:
         await _tsci_init(cwd)
+        (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)  # replace tsci's R+C starter
     _mount_skills(cwd)
     _install_parts_library(cwd)
 
@@ -152,6 +159,7 @@ def _fast_scaffold(cwd: Path, template: Path) -> None:
         pkg = json.loads(pkg_path.read_text())
         pkg["name"] = cwd.name
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
+    (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:

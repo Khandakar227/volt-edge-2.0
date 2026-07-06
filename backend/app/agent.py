@@ -44,6 +44,7 @@ You are VoltEdge's circuit-design agent. Design rules for every request:
   never use `cd`. Do not run `tsci build --pcb-png` (unsupported here). Do not
   create README/summary/doc files unless explicitly asked. Run only the checks
   you need, then `tsci build`.
+- Write the circuit to `index.circuit.tsx` (the project entry that `tsci build` compiles and the UI renders). Overwrite that file — do NOT create a separate entry like `circuit.tsx`; tsci only builds the `*.circuit.tsx` entry, so any other filename is ignored and the board won't update.
 - Finish with a 1-3 sentence summary, not a long report.
 """
 
