@@ -55,6 +55,16 @@ export const api = {
     projectId: string,
   ): Promise<{ role: string; content: string; ts: string }[]> =>
     fetch(`/api/projects/${projectId}/messages`).then(jsonOrThrow),
+
+  getEventHistory: async (projectId: string): Promise<ChatEvent[]> => {
+    const rows: { type: string; data: Record<string, any>; ts: string }[] =
+      await fetch(`/api/projects/${projectId}/events/history`).then(jsonOrThrow)
+    return rows.map((r) => ({
+      type: r.type,
+      data: r.data,
+      ts: Date.parse(r.ts),
+    }))
+  },
 }
 
 const SSE_EVENT_TYPES = [
