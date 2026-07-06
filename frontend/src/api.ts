@@ -33,6 +33,21 @@ export const api = {
       body: JSON.stringify({ title }),
     }).then(jsonOrThrow),
 
+  renameProject: (projectId: string, title: string): Promise<Project> =>
+    fetch(`/api/projects/${projectId}`, {
+      method: "PATCH",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ title }),
+    }).then(jsonOrThrow),
+
+  deleteProject: async (projectId: string): Promise<void> => {
+    const res = await fetch(`/api/projects/${projectId}`, { method: "DELETE" })
+    if (!res.ok) {
+      const body = await res.text().catch(() => "")
+      throw new Error(`${res.status}: ${body.slice(0, 200)}`)
+    }
+  },
+
   sendMessage: (projectId: string, text: string): Promise<void> =>
     fetch(`/api/projects/${projectId}/message`, {
       method: "POST",

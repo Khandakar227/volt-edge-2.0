@@ -8,13 +8,13 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse
 from sse_starlette.sse import EventSourceResponse
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from . import workspace
 from .config import settings
 from .db import db_session
 from .events import bus
-from .models import EventRecord, MessageRecord, Project
+from .models import CheckpointRecord, EventRecord, MessageRecord, Project, SessionRecord
 from .schemas import (
     CreateProjectRequest,
     EventOut,
@@ -22,6 +22,7 @@ from .schemas import (
     MessageOut,
     MessageRequest,
     ProjectOut,
+    RenameProjectRequest,
 )
 from .sessions import manager
 
@@ -60,6 +61,38 @@ async def list_projects():
     return [
         ProjectOut(id=p.id, title=p.title, created_at=p.created_at) for p in projects
     ]
+
+
+@router.patch("/projects/{project_id}", response_model=ProjectOut)
+async def rename_project(project_id: str, body: RenameProjectRequest):
+    with db_session() as db:
+        project = db.get(Project, project_id)
+        if project is None:
+            raise HTTPException(404, "project not found")
+        project.title = body.title
+        db.add(project)
+        db.commit()
+        db.refresh(project)
+        return ProjectOut(
+            id=project.id, title=project.title, created_at=project.created_at
+        )
+
+
+@router.delete("/projects/{project_id}", status_code=204)
+async def delete_project(project_id: str):
+    project = _get_project(project_id)
+    await manager.evict(project_id)
+    with db_session() as db:
+        for model in (EventRecord, MessageRecord, CheckpointRecord):
+            db.exec(delete(model).where(model.project_id == project_id))
+        session_record = db.get(SessionRecord, project_id)
+        if session_record is not None:
+            db.delete(session_record)
+        row = db.get(Project, project_id)
+        if row is not None:
+            db.delete(row)
+        db.commit()
+    workspace.remove(Path(project.cwd))
 
 
 @router.get("/projects/{project_id}/fsmap", response_model=FsMapOut)

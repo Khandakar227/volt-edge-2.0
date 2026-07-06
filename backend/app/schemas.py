@@ -9,6 +9,10 @@ class CreateProjectRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+class RenameProjectRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+
+
 class ProjectOut(BaseModel):
     id: str
     title: str

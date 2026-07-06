@@ -71,6 +71,11 @@ def _mount_skill(cwd: Path) -> None:
     shutil.copytree(settings.skill_dir, target)
 
 
+def remove(cwd: Path) -> None:
+    """Delete a project's workspace directory (best-effort)."""
+    shutil.rmtree(cwd, ignore_errors=True)
+
+
 def read_fsmap(cwd: Path) -> dict[str, str]:
     files: dict[str, str] = {}
     for path in sorted(cwd.rglob("*")):

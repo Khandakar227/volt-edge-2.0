@@ -75,6 +75,16 @@ class SessionManager:
             self._sessions[project.id] = session
             return session
 
+    async def evict(self, project_id: str) -> None:
+        """Drop a cached session and disconnect its client (used on delete)."""
+        async with self._create_lock:
+            session = self._sessions.pop(project_id, None)
+        if session is not None:
+            try:
+                await session.client.disconnect()
+            except Exception:  # best-effort teardown
+                logger.warning("failed to disconnect session %s", project_id, exc_info=True)
+
     def is_busy(self, project_id: str) -> bool:
         session = self._sessions.get(project_id)
         return session is not None and session.lock.locked()

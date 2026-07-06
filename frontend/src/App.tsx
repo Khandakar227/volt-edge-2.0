@@ -131,6 +131,27 @@ export default function App() {
     setBusy(false)
   }
 
+  const renameSession = async (id: string, title: string) => {
+    const updated = await api.renameProject(id, title)
+    setProjects((prev) => prev.map((p) => (p.id === id ? updated : p)))
+  }
+
+  const deleteSession = async (id: string) => {
+    await api.deleteProject(id)
+    const remaining = projects.filter((p) => p.id !== id)
+    setProjects(remaining)
+    if (id === activeId) {
+      if (remaining.length > 0) {
+        await loadSession(remaining[0].id)
+      } else {
+        setActiveId(null)
+        setEvents([])
+        setCircuitJson(null)
+        setBusy(false)
+      }
+    }
+  }
+
   const setWidth = (w: number) => {
     setLeftWidth(w)
     localStorage.setItem(LEFT_WIDTH_KEY, String(w))
@@ -143,6 +164,8 @@ export default function App() {
         activeId={activeId}
         onSelect={loadSession}
         onNew={newChat}
+        onRename={renameSession}
+        onDelete={deleteSession}
         collapsed={collapsed}
         onToggleCollapse={() => setCollapsed((c) => !c)}
       />
