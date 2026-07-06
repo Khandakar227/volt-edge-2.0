@@ -26,6 +26,13 @@ const AVAILABLE_TABS = WEBGL_AVAILABLE
 
 const LEFT_WIDTH_KEY = "voltedge.leftWidth"
 
+/** Session title derived from the first prompt (trimmed to a readable length). */
+function deriveTitle(text: string): string {
+  const t = text.trim().replace(/\s+/g, " ")
+  if (!t) return "Untitled board"
+  return t.length > 40 ? t.slice(0, 40) + "…" : t
+}
+
 export default function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -56,13 +63,11 @@ export default function App() {
     booted.current = true
     ;(async () => {
       try {
-        let list = await api.listProjects()
-        if (list.length === 0) {
-          const created = await api.createProject("My first board")
-          list = [created]
-        }
+        const list = await api.listProjects()
         setProjects(list)
-        await loadSession(list[0].id)
+        // Don't auto-create a session — show the empty state until the user
+        // clicks New chat or sends their first prompt.
+        if (list.length > 0) await loadSession(list[0].id)
       } catch (e: any) {
         setEvents([
           {
@@ -93,11 +98,19 @@ export default function App() {
   }, [activeId, refreshCircuit])
 
   const send = async (text: string) => {
-    if (!activeId) return
     setEvents((prev) => [...prev, { type: "user", data: { text }, ts: Date.now() }])
     setBusy(true)
     try {
-      await api.sendMessage(activeId, text)
+      let id = activeId
+      if (!id) {
+        // No session yet — create one lazily from the first prompt.
+        setCircuitJson(null)
+        const created = await api.createProject(deriveTitle(text))
+        setProjects((prev) => [created, ...prev])
+        setActiveId(created.id)
+        id = created.id
+      }
+      await api.sendMessage(id, text)
     } catch (e: any) {
       setBusy(false)
       setEvents((prev) => [
