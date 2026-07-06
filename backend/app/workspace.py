@@ -2,10 +2,23 @@
 
 import asyncio
 import json
+import logging
+import os
 import shutil
 from pathlib import Path
 
 from .config import settings
+
+logger = logging.getLogger("voltedge.workspace")
+
+# Files (besides node_modules) copied from the template into each new workspace.
+_TEMPLATE_BASE_FILES = (
+    "package.json",
+    "tsconfig.json",
+    "bun.lock",
+    "tscircuit.config.json",
+    "index.circuit.tsx",
+)
 
 # Source files exposed to the browser (fsMap). node_modules/dist/dotdirs excluded.
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
@@ -17,10 +30,20 @@ class ScaffoldError(RuntimeError):
     pass
 
 
-async def scaffold(cwd: Path) -> None:
-    """Create a tscircuit workspace: `tsci init -y`, pin tscircuit version, mount skill."""
-    cwd.mkdir(parents=True, exist_ok=True)
+_template_lock = asyncio.Lock()
 
+
+def _template_dir() -> Path:
+    return settings.workspaces_dir / ".template"
+
+
+def _template_ready(t: Path) -> bool:
+    return t.is_dir() and (t / "node_modules").is_dir() and (t / "package.json").exists()
+
+
+async def _tsci_init(cwd: Path) -> None:
+    """Full `tsci init -y` (installs node_modules) + version pin. Slow (~30s)."""
+    cwd.mkdir(parents=True, exist_ok=True)
     try:
         proc = await asyncio.create_subprocess_exec(
             "tsci",
@@ -45,10 +68,90 @@ async def scaffold(cwd: Path) -> None:
         raise ScaffoldError("tsci init timed out")
     if proc.returncode != 0:
         raise ScaffoldError(f"tsci init failed: {out.decode(errors='replace')[-500:]}")
-
     _pin_tscircuit_version(cwd)
+
+
+async def ensure_template() -> Path | None:
+    """Build the shared workspace template once (its node_modules is hardlinked
+    into every new project). Returns None if it can't be built (caller falls
+    back to a full `tsci init`)."""
+    t = _template_dir()
+    if _template_ready(t):
+        return t
+    async with _template_lock:
+        if _template_ready(t):
+            return t
+        try:
+            if t.exists():
+                shutil.rmtree(t, ignore_errors=True)
+            await _tsci_init(t)
+        except Exception:
+            logger.warning("template build failed; scaffolds will use full init", exc_info=True)
+            return None
+        return t if _template_ready(t) else None
+
+
+async def scaffold(cwd: Path) -> None:
+    """Create a tscircuit workspace, then mount skills + the parts library.
+
+    Fast path: hardlink node_modules from a shared template (near-instant).
+    Fallback: a full `tsci init` if the template can't be built.
+    """
+    template = await ensure_template()
+    if template is not None:
+        await asyncio.get_event_loop().run_in_executor(
+            None, _fast_scaffold, cwd, template
+        )
+    else:
+        await _tsci_init(cwd)
     _mount_skills(cwd)
     _install_parts_library(cwd)
+
+
+def _hardlink_tree(src: Path, dst: Path) -> None:
+    """Recreate `src` under `dst`, hardlinking regular files and re-creating
+    symlinks as symlinks. Near-instant and disk-shared vs a full copy."""
+    dst.mkdir(parents=True, exist_ok=True)
+    for root, dirs, files in os.walk(src, followlinks=False):
+        rel = Path(root).relative_to(src)
+        (dst / rel).mkdir(parents=True, exist_ok=True)
+        kept = []
+        for dname in dirs:
+            sp = Path(root) / dname
+            if sp.is_symlink():
+                dp = dst / rel / dname
+                if not dp.exists():
+                    os.symlink(os.readlink(sp), dp)
+            else:
+                kept.append(dname)
+        dirs[:] = kept  # don't descend into symlinked dirs — recreated above
+        for fname in files:
+            sp = Path(root) / fname
+            dp = dst / rel / fname
+            if dp.exists():
+                continue
+            if sp.is_symlink():
+                os.symlink(os.readlink(sp), dp)
+            else:
+                os.link(sp, dp)
+
+
+def _fast_scaffold(cwd: Path, template: Path) -> None:
+    """Create a workspace by hardlinking the template's node_modules and copying
+    its base files. `package.json` name is rewritten to the project id."""
+    cwd.mkdir(parents=True, exist_ok=True)
+    tmpl_modules = template / "node_modules"
+    if tmpl_modules.is_dir():
+        _hardlink_tree(tmpl_modules, cwd / "node_modules")
+    for name in _TEMPLATE_BASE_FILES:
+        src = template / name
+        if src.exists():
+            shutil.copy(src, cwd / name)
+    pkg_path = cwd / "package.json"
+    if pkg_path.exists():
+        pkg = json.loads(pkg_path.read_text())
+        pkg["name"] = cwd.name
+        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
