@@ -34,6 +34,7 @@ _PLACEMENT_PROPS = ("pcbX", "pcbY", "schX", "schY")
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
 _FSMAP_EXCLUDED_DIRS = {"node_modules", "dist", ".git", ".claude", ".agents", ".tscircuit"}
 _FSMAP_MAX_FILE_BYTES = 512 * 1024
+_INTEGRITY_FILES = _TEMPLATE_BASE_FILES + ("index.circuit.tsx",)
 
 
 class ScaffoldError(RuntimeError):
@@ -49,6 +50,14 @@ def _template_dir() -> Path:
 
 def _template_ready(t: Path) -> bool:
     return t.is_dir() and (t / "node_modules").is_dir() and (t / "package.json").exists()
+
+
+def _workspace_ready(cwd: Path) -> bool:
+    return (
+        cwd.is_dir()
+        and (cwd / "node_modules").is_dir()
+        and all((cwd / name).exists() for name in _INTEGRITY_FILES)
+    )
 
 
 async def _tsci_init(cwd: Path) -> None:
@@ -117,6 +126,46 @@ async def scaffold(cwd: Path) -> None:
         (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)  # replace tsci's R+C starter
     _mount_skills(cwd)
     _install_parts_library(cwd)
+    ensure_workspace_files(cwd)
+
+
+def ensure_workspace_files(cwd: Path) -> None:
+    """Repair a partial workspace enough for the UI/agent to load it.
+
+    A tunnel/server process can be killed while scaffolding or while an agent is
+    writing source. If the DB row survives but root files disappear, later API
+    calls can fail or return an fsMap with no entrypoint. Rehydrate package
+    metadata from the shared template and recreate a blank entrypoint if needed.
+    """
+    if _workspace_ready(cwd):
+        return
+
+    template = _template_dir()
+    cwd.mkdir(parents=True, exist_ok=True)
+    if not (cwd / "node_modules").is_dir() and (template / "node_modules").is_dir():
+        _hardlink_tree(template / "node_modules", cwd / "node_modules")
+
+    for name in _TEMPLATE_BASE_FILES:
+        dst = cwd / name
+        if dst.exists():
+            continue
+        src = template / name
+        if src.exists():
+            shutil.copy(src, dst)
+
+    pkg_path = cwd / "package.json"
+    if pkg_path.exists():
+        try:
+            pkg = json.loads(pkg_path.read_text())
+            pkg["name"] = cwd.name
+            pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
+        except json.JSONDecodeError:
+            logger.warning("workspace package.json is invalid: %s", pkg_path)
+
+    entry = cwd / "index.circuit.tsx"
+    if not entry.exists():
+        entry.write_text(_DEFAULT_ENTRY)
+        logger.warning("workspace entrypoint was missing; recreated %s", entry)
 
 
 def _hardlink_tree(src: Path, dst: Path) -> None:
@@ -150,20 +199,30 @@ def _hardlink_tree(src: Path, dst: Path) -> None:
 def _fast_scaffold(cwd: Path, template: Path) -> None:
     """Create a workspace by hardlinking the template's node_modules and copying
     its base files. `package.json` name is rewritten to the project id."""
-    cwd.mkdir(parents=True, exist_ok=True)
+    tmp = cwd.with_name(f".{cwd.name}.scaffold-tmp")
+    if tmp.exists():
+        shutil.rmtree(tmp, ignore_errors=True)
+    if cwd.exists() and any(cwd.iterdir()):
+        raise ScaffoldError(f"workspace already exists and is not empty: {cwd}")
+
+    tmp.mkdir(parents=True, exist_ok=True)
     tmpl_modules = template / "node_modules"
     if tmpl_modules.is_dir():
-        _hardlink_tree(tmpl_modules, cwd / "node_modules")
+        _hardlink_tree(tmpl_modules, tmp / "node_modules")
     for name in _TEMPLATE_BASE_FILES:
         src = template / name
         if src.exists():
-            shutil.copy(src, cwd / name)
-    pkg_path = cwd / "package.json"
+            shutil.copy(src, tmp / name)
+    pkg_path = tmp / "package.json"
     if pkg_path.exists():
         pkg = json.loads(pkg_path.read_text())
         pkg["name"] = cwd.name
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n")
-    (cwd / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
+    (tmp / "index.circuit.tsx").write_text(_DEFAULT_ENTRY)
+
+    if cwd.exists():
+        shutil.rmtree(cwd, ignore_errors=True)
+    tmp.rename(cwd)
 
 
 def _pin_tscircuit_version(cwd: Path) -> None:
@@ -263,6 +322,7 @@ def remove(cwd: Path) -> None:
 
 
 def read_fsmap(cwd: Path) -> dict[str, str]:
+    ensure_workspace_files(cwd)
     files: dict[str, str] = {}
     for path in sorted(cwd.rglob("*")):
         if not path.is_file() or path.suffix not in _FSMAP_EXTENSIONS:
