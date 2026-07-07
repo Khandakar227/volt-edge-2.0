@@ -7,6 +7,47 @@ live as Schematic / PCB / 3D, with drag-to-edit + in-browser re-autoroute.
 **Docs:** [SPEC](docs/SPEC.md) · [PLAN](docs/PLAN.md) · [TASKS](docs/TASKS.md) ·
 [PACKAGES](docs/PACKAGES.md) · [Phase 0 results](docs/PHASE0_RESULTS.md)
 
+## Example: a 555 LED blinker, from one prompt
+
+Everything below was produced by a single chat turn — the agent designed the astable
+555 circuit (68 kΩ / 68 kΩ / 10 µF ≈ 1 Hz), sourced parts, placed and routed the
+2-layer 40×30 mm board, ran the validation checks, and checkpointed.
+
+<details>
+<summary>The prompt</summary>
+
+> Create a simple LED blinker board using a 555 timer.
+>
+> Requirements:
+> * 5V input power through a 2-pin screw terminal
+> * One red status LED blinking around 1 Hz
+> * Use common, easily sourceable parts
+> * Include a current-limiting resistor for the LED
+> * Add silkscreen labels for power input, LED, and main components
+> * Make the PCB 2-layer
+> * Keep the board roughly 40 mm × 30 mm
+> * Place the LED near the top edge
+> * Put the power terminal on the left edge
+> * Generate a clean schematic, PCB layout, and 3D render
+> * Run validation checks before showing the checkpoint
+> * If any part is unavailable in the tscircuit registry, try JLCPCB exact part sourcing
+> * Do not silently change the board size, voltage, or blink-rate target
+> * Ask me only if a decision would significantly affect the final board
+
+</details>
+
+**Schematic** — NE555DR astable, R3 330 Ω LED limiter, WJ500V screw terminal:
+
+![Schematic view: NE555 astable oscillator with timing network, LED + current-limiting resistor, and screw-terminal power input](docs/images/555-blinker-schematic.png)
+
+**PCB layout** — power terminal on the left edge, LED near the top, silkscreen labels:
+
+![PCB view: routed 2-layer 40×30 mm board with PWR screw terminal left, 555 in the center, LED1 labeled](docs/images/555-blinker-pcb.png)
+
+**3D render:**
+
+![3D view: board with screw terminal, SOIC-8 555 and passives](docs/images/555-blinker-3d.png)
+
 ## How it works
 
 VoltEdge is three pieces: a **React frontend**, a **FastAPI backend**, and a **Claude
@@ -15,58 +56,11 @@ workspace. The browser renders with tscircuit **RunFrame**, which evaluates the
 workspace source *in the browser* — so the PCB/schematic are interactive (drag, Run,
 autoroute), not just static images.
 
-```mermaid
-flowchart LR
-  subgraph Browser["Browser — React + Vite + Tailwind"]
-    SB["Session sidebar<br/>(new / switch / rename / delete)"]
-    Chat["Chat panel<br/>(rich SSE transcript)"]
-    RF["RunFrame<br/>in-browser eval + autoroute"]
-  end
-  subgraph Backend["Backend — FastAPI"]
-    API["HTTP + SSE routes"]
-    SM["SessionManager<br/>1 ClaudeSDKClient / project"]
-    WS["Workspace service<br/>scaffold · tsci build · fsMap"]
-    BUS["SSE event bus"]
-    DB[("SQLite<br/>projects · events · checkpoints")]
-  end
-  subgraph Agent["Claude Agent (Agent SDK)"]
-    SK["Skills:<br/>tscircuit + components (parts lib)"]
-    TSCI["tsci build / search / import"]
-  end
-  FILES["Workspace files<br/>index.circuit.tsx · parts/"]
-
-  Chat -- "POST /message" --> API --> SM --> Agent
-  Agent --> SK
-  Agent --> TSCI --> FILES
-  SM -- events --> BUS -- SSE --> Chat
-  SM --> DB
-  RF -- "GET /fsmap" --> API --> WS --> FILES
-  FILES -. fsMap .-> RF
-```
+![VoltEdge architecture — browser UI layer, FastAPI backend, Claude agent & tools, storage/filesystem](docs/diagrams/architecture.png)
 
 ### A turn, step by step
 
-```mermaid
-sequenceDiagram
-  actor U as User
-  participant FE as Frontend
-  participant BE as Backend
-  participant AG as Claude agent
-  participant FS as Workspace
-  U->>FE: describe a circuit
-  FE->>BE: POST /projects/{id}/message
-  BE->>AG: run_turn(prompt)
-  loop streamed
-    AG-->>BE: thinking / tool_use / tool_result
-    BE-->>FE: SSE events (also persisted to SQLite)
-  end
-  AG->>FS: write index.circuit.tsx, run `tsci build`
-  AG-->>BE: done
-  BE-->>FE: checkpoint + done (busy clears)
-  FE->>BE: GET /projects/{id}/fsmap
-  BE-->>FE: source files
-  FE->>FE: RunFrame evaluates + renders (PCB/Schematic/3D)
-```
+![One turn end-to-end — prompt → POST /message → agent run_turn → SSE events → build → fsMap fetch → RunFrame render](docs/diagrams/turn-sequence.png)
 
 Key points:
 - `index.circuit.tsx` is the **one entry** tscircuit builds and the UI renders. The agent
@@ -80,15 +74,7 @@ Key points:
 
 There is **no MCP server** — the agent sources parts two ways:
 
-```mermaid
-flowchart TD
-  A["Agent needs a part"] --> B{"In the local<br/>parts library?"}
-  B -- yes --> C["import from ./parts/<br/>(curated, dimensionally correct)"]
-  B -- no --> D["tsci search / tsci import"]
-  D --> E["tscircuit registry<br/>+ JLCPCB parts"]
-  C --> F["index.circuit.tsx"]
-  E --> F
-```
+![Part sourcing decision tree — local parts library → tscircuit registry (tsci add) → JLCPCB by exact LCSC part# → hand-model from datasheet](docs/diagrams/parts-sourcing.png)
 
 1. **Local parts library** (`component-kb/parts/*.tsx`, mounted into each workspace as
    `./parts/`): verified board components — ESP32-C3 SuperMini, GY-521/MPU-6050, STM32
