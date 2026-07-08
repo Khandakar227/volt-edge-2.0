@@ -28,6 +28,7 @@ class Settings(BaseSettings):
 
     # CORS for the Vite dev server
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    expose_error_details: bool = True
 
     @property
     def agent_path(self) -> str:

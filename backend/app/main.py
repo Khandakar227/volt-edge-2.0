@@ -6,8 +6,9 @@ Run: uvicorn app.main:app --port 8000 (from backend/)
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import settings
 from .db import init_db
@@ -34,6 +35,13 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, exc: Exception):
+    logging.exception("unhandled backend error")
+    detail = str(exc)[:500] if settings.expose_error_details else "internal server error"
+    return JSONResponse(status_code=500, content={"detail": detail})
 
 
 @app.get("/api/health")

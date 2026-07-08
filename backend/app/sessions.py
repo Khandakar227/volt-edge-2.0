@@ -54,6 +54,8 @@ class SessionManager:
             if not cwd.exists():
                 logger.warning("workspace %s missing; re-scaffolding", cwd)
                 await workspace.scaffold(cwd)
+            else:
+                workspace.ensure_workspace_files(cwd)
 
             client = ClaudeSDKClient(options=build_options(cwd))
             await client.connect()

@@ -116,6 +116,16 @@ Open http://localhost:5173, click **New chat**, describe a circuit, and watch th
 build it. Restart the backend after pulling changes so agent steering / scaffolding /
 routes update.
 
+## Run through ngrok
+
+Deployed URL: https://elective-reoccupy-unknown.ngrok-free.dev
+
+To use your PC as the public server, see [docs/NGROK_DEPLOY.md](docs/NGROK_DEPLOY.md).
+The setup serves the built frontend locally, proxies `/api` to FastAPI, and exposes
+that single local origin with ngrok.
+
+Health check: https://elective-reoccupy-unknown.ngrok-free.dev/api/health
+
 ## Layout
 
 ```

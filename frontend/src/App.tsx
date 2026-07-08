@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { api, subscribeEvents, type ChatEvent, type Project } from "./api"
 import { SessionSidebar } from "./components/SessionSidebar"
 import { ChatPanel } from "./components/ChatPanel"
+import { HomePage } from "./components/HomePage"
 import { PreviewPane } from "./components/PreviewPane"
 import { ResizableSplit } from "./components/ResizableSplit"
 
@@ -38,6 +39,7 @@ export default function App() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [events, setEvents] = useState<ChatEvent[]>([])
   const [busy, setBusy] = useState(false)
+  const [showHome, setShowHome] = useState(() => window.location.hash !== "#app")
   // RunFrame evaluates the workspace source in-browser; we feed it the fsMap and
   // bump evalVersion to force a re-eval after the agent changes files.
   const [fsMap, setFsMap] = useState<Record<string, string> | null>(null)
@@ -46,6 +48,7 @@ export default function App() {
   // to its component name so the drag can be written into the source.
   const circuitJsonRef = useRef<any>([])
   const activeIdRef = useRef<string | null>(null)
+  const startedFromHomeRef = useRef(false)
   // The PCB viewer keeps every drag event since mount in internal state and
   // re-applies them (delta-based) to each new eval result — after 2+ drags the
   // replay deviates the component by its total travel. There is no prop to
@@ -141,10 +144,13 @@ export default function App() {
 
   // Load a session's rich transcript + current source files.
   const loadSession = useCallback(
-    async (id: string) => {
+    async (id: string, opts?: { fromBoot?: boolean }) => {
+      if (opts?.fromBoot && startedFromHomeRef.current) return
       setActiveId(id)
       setBusy(false)
-      setEvents(await api.getEventHistory(id))
+      const history = await api.getEventHistory(id)
+      if (opts?.fromBoot && startedFromHomeRef.current) return
+      setEvents(history)
       await loadFsMap(id)
     },
     [loadFsMap],
@@ -159,8 +165,10 @@ export default function App() {
     ;(async () => {
       try {
         const list = await api.listProjects()
-        setProjects(list)
-        if (list.length > 0) await loadSession(list[0].id)
+        setProjects((prev) =>
+          startedFromHomeRef.current && prev.length > 0 ? prev : list,
+        )
+        if (list.length > 0) await loadSession(list[0].id, { fromBoot: true })
       } catch (e: any) {
         setEvents([
           {
@@ -172,6 +180,12 @@ export default function App() {
       }
     })()
   }, [loadSession])
+
+  useEffect(() => {
+    const syncHash = () => setShowHome(window.location.hash !== "#app")
+    window.addEventListener("hashchange", syncHash)
+    return () => window.removeEventListener("hashchange", syncHash)
+  }, [])
 
   // SSE subscription for the active session.
   useEffect(() => {
@@ -187,16 +201,28 @@ export default function App() {
     return close
   }, [activeId, loadFsMap])
 
-  const send = async (text: string) => {
-    setEvents((prev) => [...prev, { type: "user", data: { text }, ts: Date.now() }])
+  const send = async (text: string, opts?: { newSession?: boolean }) => {
+    const userEvent: ChatEvent = {
+      type: "user",
+      data: { text },
+      ts: Date.now(),
+    }
+    if (opts?.newSession) {
+      startedFromHomeRef.current = true
+      setActiveId(null)
+      setEvents([userEvent])
+      setFsMap(null)
+    } else {
+      setEvents((prev) => [...prev, userEvent])
+    }
     setBusy(true)
     try {
-      let id = activeId
+      let id = opts?.newSession ? null : activeId
       if (!id) {
         // No session yet — create one lazily from the first prompt.
         setFsMap(null)
         const created = await api.createProject(deriveTitle(text))
-        setProjects((prev) => [created, ...prev])
+        setProjects((prev) => [created, ...prev.filter((p) => p.id !== created.id)])
         setActiveId(created.id)
         id = created.id
       }
@@ -245,6 +271,20 @@ export default function App() {
   const setWidth = (w: number) => {
     setLeftWidth(w)
     localStorage.setItem(LEFT_WIDTH_KEY, String(w))
+  }
+
+  const openWorkspace = () => {
+    window.location.hash = "app"
+    setShowHome(false)
+  }
+
+  const startFromHome = (prompt: string) => {
+    openWorkspace()
+    void send(prompt, { newSession: true })
+  }
+
+  if (showHome) {
+    return <HomePage onLaunch={openWorkspace} onSubmitPrompt={startFromHome} />
   }
 
   return (

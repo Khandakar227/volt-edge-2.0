@@ -1,6 +1,8 @@
 # --- Generated/runtime state (never commit) ---
-workspaces/          # per-project tscircuit workspaces (scaffolded at runtime)
-data/                # SQLite database
+# per-project tscircuit workspaces (scaffolded at runtime)
+workspaces/
+# SQLite database
+data/
 
 # --- Node ---
 node_modules/
