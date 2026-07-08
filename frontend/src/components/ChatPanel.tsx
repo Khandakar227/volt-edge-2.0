@@ -65,35 +65,83 @@ export function ChatPanel({
         </div>
       </div>
 
-      <div className="flex gap-2 border-t border-[var(--border)] p-3">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault()
-              submit()
+      <div className="border-t border-[var(--border)] bg-[var(--panel)]/80 backdrop-blur-md p-2">
+        <div className="flex items-end gap-3 rounded-2xl border border-[var(--border)] bg-[var(--background)] p-3 shadow-lg transition-all focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20">
+
+          <textarea
+            id="chat-input"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault()
+                submit()
+              }
+            }}
+            rows={1}
+            placeholder={
+              busy
+                ? "Agent is thinking..."
+                : "Describe your circuit..."
             }
-          }}
-          placeholder={busy ? "agent is working…" : "Describe your circuit…"}
-          rows={2}
-          className="flex-1 resize-none rounded-lg border border-[var(--border)] bg-[var(--panel)] p-2.5 text-sm text-[var(--text)] outline-none focus:border-[var(--accent)]"
-        />
-        {busy ? (
-          <button
-            onClick={onInterrupt}
-            className="flex items-center gap-1.5 rounded-lg bg-red-700 px-4 text-sm text-white hover:opacity-90"
-          >
-            <Square size={14} /> Stop
-          </button>
-        ) : (
-          <button
-            onClick={submit}
-            className="flex items-center gap-1.5 rounded-lg bg-[var(--accent)] px-4 text-sm text-white hover:opacity-90"
-          >
-            <Send size={14} /> Send
-          </button>
-        )}
+            className="
+        flex-1
+        resize-none
+        bg-transparent
+        px-1
+        py-2
+        text-sm
+        text-[var(--text)]
+        placeholder:text-[var(--muted)]
+        outline-none
+        max-h-40
+      "
+          />
+
+          {busy ? (
+            <button
+              onClick={onInterrupt}
+              className="
+          flex h-11 w-11 items-center justify-center
+          rounded-xl
+          bg-red-600
+          text-white
+          shadow-md
+          transition-all
+          hover:scale-105
+          hover:bg-red-500
+          active:scale-95
+        "
+            >
+              <Square size={16} />
+            </button>
+          ) : (
+            <button
+              onClick={submit}
+              disabled={!draft.trim()}
+              className="
+          flex h-11 w-11 items-center justify-center
+          rounded-xl
+          bg-[var(--accent)]
+          text-white
+          shadow-md
+          transition-all
+          hover:scale-105
+          hover:shadow-lg
+          active:scale-95
+          disabled:cursor-not-allowed
+          disabled:opacity-40
+        "
+            >
+              <Send size={18} />
+            </button>
+          )}
+        </div>
+
+        <div className="mt-1 flex justify-between px-2 text-xs text-[var(--muted)]">
+          <span>Press <kbd className="rounded bg-[var(--panel)] px-1">Enter</kbd> to send</span>
+          <span><kbd className="rounded bg-[var(--panel)] px-1">Shift + Enter</kbd> for newline</span>
+        </div>
       </div>
     </div>
   )

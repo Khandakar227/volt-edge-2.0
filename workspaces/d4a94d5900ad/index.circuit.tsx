@@ -4,7 +4,7 @@ export default () => (
   <board width="120mm" height="80mm">
     {/* Arduino Nano - centered */}
     <ArduinoNano
-      name="U1" schX={1.9} schY={1.2}
+      name="U1" schX={3.4} schY={2.5}
       pcbX={-11.006196381853016}
       pcbY={3.886283412669343}
     />
@@ -12,6 +12,7 @@ export default () => (
     {/* Servo 1 - MG90 (left side, top) */}
     <pinheader
       name="SERVO1"
+      schX={1.2} schY={-0.4}
       pinCount={3}
       pitch="2.54mm"
       pinLabels={["SIG", "VCC", "GND"]}
@@ -22,6 +23,7 @@ export default () => (
     {/* Servo 2 - MG90 (left side, middle) */}
     <pinheader
       name="SERVO2"
+      schX={-1.7} schY={1}
       pinCount={3}
       pitch="2.54mm"
       pinLabels={["SIG", "VCC", "GND"]}
@@ -31,7 +33,7 @@ export default () => (
 
     {/* External power supply connector (left side, bottom) */}
     <pinheader
-      name="PWR"
+      name="PWR" schX={-1.5} schY={3.2}
       pinCount={2}
       pitch="2.54mm"
       pinLabels={["VCC", "GND"]}

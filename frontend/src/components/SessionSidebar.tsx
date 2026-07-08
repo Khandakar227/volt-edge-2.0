@@ -176,7 +176,7 @@ export function SessionSidebar({
     )
   }
   return (
-    <div className="flex w-60 shrink-0 flex-col border-r border-[var(--border)]">
+    <div className="flex w-60 shrink-0 flex-col border-r border-[var(--border)]" style={{ backgroundColor: "rgb(0 94 148 / 10%)" }}>
       <div className="flex items-center justify-between px-3 py-3">
         <span className="flex items-center gap-1.5 font-semibold">
           <Zap size={16} className="text-[var(--accent)]" /> VoltEdge
