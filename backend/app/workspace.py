@@ -77,6 +77,30 @@ async def _tsci_init(cwd: Path) -> None:
     if proc.returncode != 0:
         raise ScaffoldError(f"tsci init failed: {out.decode(errors='replace')[-500:]}")
     _pin_tscircuit_version(cwd)
+    await _install_common(cwd)
+
+
+async def _install_common(cwd: Path) -> None:
+    """Add `@tscircuit/common` (standard form-factor boards / carriers) so the agent
+    can use ArduinoShield / RaspberryPiHatBoard / XiaoBoard / etc. without a manual
+    install mid-turn. Best-effort: a failure here must not fail the scaffold."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "bun",
+            "add",
+            "@tscircuit/common",
+            cwd=cwd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            env={"PATH": settings.agent_path, "HOME": str(Path.home())},
+        )
+        _, _ = await asyncio.wait_for(
+            proc.communicate(), timeout=settings.scaffold_timeout_s
+        )
+        if proc.returncode != 0:
+            logger.warning("`bun add @tscircuit/common` failed; continuing without it")
+    except (FileNotFoundError, asyncio.TimeoutError):
+        logger.warning("could not install @tscircuit/common; continuing without it", exc_info=True)
 
 
 async def ensure_template() -> Path | None:

@@ -26,14 +26,16 @@ When this Skill is active:
 2) Choose a starting point
 - If the repo is not a tscircuit project, recommend:
   - Install CLI, then `tsci init` to bootstrap a project.
-- If a form-factor template is appropriate (Arduino Shield, Raspberry Pi HAT, etc.), prefer `@tscircuit/common` templates.
+- For a standard board shape, use a `@tscircuit/common` form-factor board (see step 3, source 3) instead of hand-modeling the outline.
 
-3) Find and install components
-- Use `tsci search "<query>"` to discover footprints and tscircuit registry packages.
-- For USB-C receptacles/connectors, prefer builtin syntax with `<connector standard="usb_c" />` instead of importing from JLCPCB.
-- Use one of:
-  - `tsci add <author/pkg>` for registry packages (installs `@tsci/*` packages)
-  - `tsci import <query>` when you need to import a component from JLCPCB or the registry.
+3) Source components — exhaust existing sources IN ORDER before modeling by hand
+Work down this list and stop at the first source that has the part. Hand-modeling is the **last resort** (source 5), never a shortcut.
+1. **Local library `./parts/`** — the curated boards in the `components` skill; import and place, never hand-model these.
+2. **tscircuit registry** — `tsci search --tscircuit "<query>"`, then `tsci add <author/pkg>` (installs `@tsci/*` packages).
+3. **`@tscircuit/common`** (installed) — standard form-factor boards / carriers: `ArduinoShield`, `RaspberryPiHatBoard`, `XiaoBoard`, `ProMicroBoard`, `MicroModBoard`, `ViaGridBoard`. Use for a standard board/carrier instead of hand-modeling an outline + headers.
+4. **JLCPCB / LCSC** — `tsci search --jlcpcb "<query>"`, then `tsci import "<part#>"` for an authoritative supplier footprint.
+5. **Model it yourself** — only if 1–4 all miss (real pin count, `pitch`, row layout, real dimensions; a single-inline-header breakout is NOT a DIP).
+- USB-C is the exception: always use builtin `<connector standard="usb_c" />`, never a JLC import.
 
 4) Write/modify TSX circuit code
 - Keep circuits as a default-exported function that returns JSX.

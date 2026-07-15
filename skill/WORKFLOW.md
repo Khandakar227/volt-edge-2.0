@@ -11,18 +11,31 @@
 - Add power entry (USB-C, barrel jack, header) and protection (fuse/TVS) as appropriate.
 - For USB-C, use `<connector standard="usb_c" />` directly (no JLC import needed).
 
-## 3) Search before you model
+## 3) Source parts: exhaust existing sources before modeling by hand
 
-- Use `tsci search` to find:
-  - JLCPCB components: `tsci search --jlcpcb "STM32F4"`
-  - KiCad footprints: `tsci search --kicad "SOIC8"`
-  - Registry packages: `tsci search --tscircuit "ESP32"`
+For every part, work down this list **in order** and stop at the first source that has
+it. Hand-modeling is the **last resort**, only after 1–4 all miss.
 
-## 4) Add/import parts
+1. **Local library `./parts/`** — the curated, dimensionally-correct boards in the
+   `components` skill (ESP32-C3 SuperMini, GY-521/MPU-6050, STM32 Blue Pill, Arduino
+   Nano, Arduino Uno shield). If the part is here, import and place it; never
+   hand-model it.
+2. **tscircuit registry** — `tsci search --tscircuit "<query>"`, then
+   `tsci add <author/pkg>` for a reusable community package.
+3. **`@tscircuit/common`** (already installed) — standard form-factor boards /
+   carriers: `ArduinoShield`, `RaspberryPiHatBoard`, `XiaoBoard`, `ProMicroBoard`,
+   `MicroModBoard`, `ViaGridBoard`. Use these for a standard board shape/carrier
+   instead of hand-modeling an outline + headers, e.g.
+   `import { ArduinoShield } from "@tscircuit/common"`.
+4. **JLCPCB / LCSC** — `tsci search --jlcpcb "<query>"`, then `tsci import "<part#>"`
+   for an authoritative supplier footprint. (You can also `tsci search --kicad "SOIC8"`
+   for a footprint by name.)
+5. **Model it yourself** — only if none of the above has the part. See "Define
+   pinLabels and pinAttributes first" below. A single-inline-header breakout is NOT a
+   DIP.
 
-- Prefer `tsci add <author/pkg>` when a reusable module exists.
-- Use `tsci import` when you must bring in a specific component (e.g., supplier part).
-- For JLCPCB parts: first search with `tsci search --jlcpcb "<query>"`, then import with `tsci import "<part number>"`.
+USB-C is the exception to the search: always use builtin
+`<connector standard="usb_c" />` directly (no JLC import).
 
 ## 5) Define pinLabels and pinAttributes first
 

@@ -21,5 +21,8 @@
     "@types/react": "^19.2.17",
     "tscircuit": "^0.0.2006",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@tscircuit/common": "^0.0.42"
   }
 }

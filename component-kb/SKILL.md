@@ -16,8 +16,11 @@ single `<chip>`, so it renders as ONE schematic symbol with the correct PCB.
 - If the user's part is in the catalog below, **import and place the library
   component** — never hand-model its headers or invent a `dip*` footprint.
 - Wire by pin **label** (e.g. `.U1 > .IO8`), not pin number.
-- For a part NOT in the catalog: `tsci search`/`tsci import` from the registry,
-  or model a breakout as a `<pinheader>` with real pin count/pitch/dimensions.
+- For a part NOT in the catalog, exhaust the other existing sources IN ORDER
+  before hand-modeling: tscircuit registry (`tsci add`) → `@tscircuit/common`
+  (standard form-factor boards: `ArduinoShield`, `RaspberryPiHatBoard`,
+  `XiaoBoard`, …) → JLCPCB (`tsci import "<part#>"`). Only if all miss, model a
+  breakout as a `<pinheader>` with real pin count/pitch/dimensions.
 - Read the part file itself for the exact pinout before wiring — the header
   comment lists every pin and any "verify against your board's silkscreen"
   caveats (clone boards vary).
