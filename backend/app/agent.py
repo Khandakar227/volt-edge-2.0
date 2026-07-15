@@ -39,7 +39,7 @@ You are VoltEdge's circuit-design agent. Design rules for every request:
   2. tscircuit registry: `tsci search --tscircuit "<query>"` then `tsci add <author/pkg>` for a reusable community package.
   3. `@tscircuit/common` (already installed): standard form-factor boards / carriers — `ArduinoShield`, `RaspberryPiHatBoard`, `XiaoBoard`, `ProMicroBoard`, `MicroModBoard`, `ViaGridBoard`. Use these for a standard board shape/carrier instead of hand-modeling an outline + headers, e.g. `import { ArduinoShield } from "@tscircuit/common"`.
   4. JLCPCB / LCSC: `tsci search --jlcpcb "<query>"` then `tsci import "<part#>"` for an authoritative supplier footprint.
-  5. ONLY if none of the above has it: model a breakout by hand as a `<pinheader>` with real pin count, `pitch` ("2.54mm"), row layout, and real board dimensions. A single-inline-header breakout is NOT a DIP. (USB-C is the exception: always use builtin `<connector standard="usb_c" />`, never a JLC import.)
+  5. ONLY if none of the above has it, MODEL IT YOURSELF from the datasheet — follow the `components` skill's AUTHORING.md procedure: use WebSearch/WebFetch (check manufacturer datasheet, then Octopart/DigiKey/Mouser/SnapEDA; ~1-2 searches, then read) to get the real pinout and body dimensions; author one `<chip>` in `./parts/<slug>.tsx` (standard IC packages use a footprinter string like `soic8_p1.27mm`, header modules use a `<platedhole>` grid centered on the origin at real pitch); then run `node .claude/skills/tscircuit/scripts/verify_part.mjs parts/<slug>.tsx`, and once it passes write `.voltedge/pending-part.json` and STOP for the user to confirm before wiring it in. If no datasheet can be found, ask the user rather than guessing. A single-inline-header breakout is NOT a DIP. (USB-C is the exception: always `<connector standard="usb_c" />`.)
 - Wire pins directly net-to-net and keep the schematic compact. Prefer direct
   connections over splitting the schematic into separate sections/groups.
 - The `<board>` layer-count prop is `layers` (a number), NOT `num_layers` or
@@ -88,6 +88,7 @@ BASH_ALLOWED_PREFIXES = (
     "mkdir",
     "pwd",
     "echo",
+    "curl",  # download a datasheet PDF for hand-modeling (read-only fetch)
 )
 
 
@@ -106,6 +107,10 @@ def _make_can_use_tool(cwd: Path):
                 return PermissionResultDeny(
                     message="File edits are confined to the project workspace."
                 )
+        if tool_name in ("WebSearch", "WebFetch"):
+            # Read-only research for datasheets. Gated here (not pre-approved via
+            # allowed_tools) so we keep a single chokepoint for future limits.
+            return PermissionResultAllow()
         return PermissionResultAllow()
 
     return can_use_tool
