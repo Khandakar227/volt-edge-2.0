@@ -33,6 +33,9 @@ it. Hand-modeling is the **last resort**, only after 1–4 all miss.
 5. **Model it yourself** — only if none of the above has the part. See "Define
    pinLabels and pinAttributes first" below. A single-inline-header breakout is NOT a
    DIP.
+   After authoring, verify with `node .claude/skills/tscircuit/scripts/verify_part.mjs
+   parts/<slug>.tsx`, then write `.voltedge/pending-part.json` and stop for the user to
+   confirm (see the `components` skill's AUTHORING.md).
 
 USB-C is the exception to the search: always use builtin
 `<connector standard="usb_c" />` directly (no JLC import).

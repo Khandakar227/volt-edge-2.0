@@ -21,6 +21,9 @@ single `<chip>`, so it renders as ONE schematic symbol with the correct PCB.
   (standard form-factor boards: `ArduinoShield`, `RaspberryPiHatBoard`,
   `XiaoBoard`, …) → JLCPCB (`tsci import "<part#>"`). Only if all miss, model a
   breakout as a `<pinheader>` with real pin count/pitch/dimensions.
+- To author a brand-new part once every source has missed, follow
+  [AUTHORING.md](./AUTHORING.md): research the datasheet, model dimensions +
+  footprint + pinout, verify, then confirm with the user.
 - Read the part file itself for the exact pinout before wiring — the header
   comment lists every pin and any "verify against your board's silkscreen"
   caveats (clone boards vary).
