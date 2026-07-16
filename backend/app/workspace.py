@@ -30,7 +30,7 @@ _PLACEMENT_PROPS = ("pcbX", "pcbY", "schX", "schY")
 
 # Source files exposed to the browser (fsMap). node_modules/dist/dotdirs excluded.
 _FSMAP_EXTENSIONS = {".tsx", ".ts", ".json", ".md"}
-_FSMAP_EXCLUDED_DIRS = {"node_modules", "dist", ".git", ".claude", ".agents", ".tscircuit"}
+_FSMAP_EXCLUDED_DIRS = {"node_modules", "dist", ".git", ".claude", ".agents", ".tscircuit", ".voltedge"}
 _FSMAP_MAX_FILE_BYTES = 512 * 1024
 
 
@@ -316,3 +316,22 @@ def circuit_json_path(cwd: Path) -> Path | None:
 def circuit_json_mtime(cwd: Path) -> float:
     path = circuit_json_path(cwd)
     return path.stat().st_mtime if path else 0.0
+
+
+def _pending_part_file(cwd: Path) -> Path:
+    return cwd / ".voltedge" / "pending-part.json"
+
+
+def pending_part_mtime(cwd: Path) -> float:
+    p = _pending_part_file(cwd)
+    return p.stat().st_mtime if p.exists() else 0.0
+
+
+def read_pending_part(cwd: Path) -> dict | None:
+    p = _pending_part_file(cwd)
+    if not p.exists():
+        return None
+    try:
+        return json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
+        return None

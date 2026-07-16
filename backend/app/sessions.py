@@ -21,7 +21,7 @@ from .db import db_session
 from .events import bus
 from .models import CheckpointRecord, EventRecord, MessageRecord, Project, SessionRecord
 from . import workspace
-from .workspace import circuit_json_mtime
+from .workspace import circuit_json_mtime, pending_part_mtime, read_pending_part
 
 logger = logging.getLogger("voltedge.sessions")
 
@@ -33,6 +33,7 @@ class ProjectSession:
     client: ClaudeSDKClient
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     last_circuit_mtime: float = 0.0
+    last_part_review_mtime: float = 0.0
     checkpoint_version: int = 0
 
 
@@ -63,6 +64,7 @@ class SessionManager:
                 cwd=cwd,
                 client=client,
                 last_circuit_mtime=circuit_json_mtime(cwd),
+                last_part_review_mtime=pending_part_mtime(cwd),
             )
             with db_session() as db:
                 for cp in db.exec(
@@ -124,12 +126,14 @@ class SessionManager:
                         self._persist_event(project.id, event_type, data)
                         if event_type == "tool_result":
                             await self._maybe_checkpoint(session)
+                            await self._maybe_part_review(session)
                         if event_type == "done" and data.get("session_id"):
                             self._store_claude_session_id(
                                 project.id, data["session_id"]
                             )
                 # end-of-turn sweep in case the last build wasn't followed by a tool_result
                 await self._maybe_checkpoint(session)
+                await self._maybe_part_review(session)
             except Exception as exc:  # surface, don't swallow
                 logger.exception("turn failed for project %s", project.id)
                 await bus.publish(project.id, "error", {"message": str(exc)[:500]})
@@ -166,6 +170,17 @@ class SessionManager:
             "checkpoint",
             {"version": session.checkpoint_version, "summary": summary},
         )
+
+    async def _maybe_part_review(self, session: ProjectSession) -> None:
+        mtime = pending_part_mtime(session.cwd)
+        if mtime <= session.last_part_review_mtime:
+            return
+        session.last_part_review_mtime = mtime
+        payload = read_pending_part(session.cwd)
+        if payload is None:
+            return
+        await bus.publish(session.project_id, "part_review", payload)
+        self._persist_event(session.project_id, "part_review", payload)
 
     def _persist_message(self, project_id: str, role: str, content: str) -> None:
         with db_session() as db:
